@@ -1,79 +1,155 @@
-export default function Home() {
-          return (
-              <main className="flex min-h-screen flex-col lg:flex-row font-sans bg-slate-50">
-                    
-                          {/* Left Side - Options & Activities Dashboard */}
-                                <div className="w-full lg:w-[45%] bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col p-8 md:p-12 relative overflow-y-auto shadow-2xl z-10 border-r border-slate-800">
-                                        
-                                                {/* Background Glows */}
-                                                        <div className="absolute top-0 left-0 w-full h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-[120px] opacity-20 pointer-events-none"></div>
+ export default function Home() {
+  return (
+    <main className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col lg:flex-row">
+      
+      {/* Left Side - Options & Activities Dashboard */}
+      <div className="w-full lg:w-[42%] bg-slate-900 border-b lg:border-b-0 lg:border-r border-slate-800 p-6 md:p-8 flex flex-col gap-8">
+        
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg flex items-center justify-center">
+            <span className="text-xl">🗣️</span>
+          </div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">
+            English <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">Coach</span>
+          </h1>
+        </div>
 
-                                                                {/* Header */}
-                                                                        <div className="flex items-center gap-4 mb-10 z-10">
-                                                                                  <div className="w-12 h-12 bg-gradient-to-tr from-indigo-500 to-purple-500 rounded-xl shadow-lg flex items-center justify-center transform rotate-3">
-                                                                                              <span className="text-2xl">🗣️</span>
-                                                                                                        </div>
-                                                                                                                  <h1 className="text-3xl font-extrabold tracking-tight text-white">
-                                                                                                                              English <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">Coach</span>
-                                                                                                                                        </h1>
-                                                                                                                                                </div>
+        {/* Practice Modules */}
+        <div className="flex flex-col gap-4">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <span>📚</span> Practice Modules
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3">
+            
+            {/* Module Card */}
+            <div className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl hover:bg-slate-800 transition-all cursor-pointer group">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-xl">✈️</span>
+                <h3 className="text-sm font-bold text-white">Travel & Tourism</h3>
+              </div>
+              <p className="text-xs text-slate-400 pl-8">Practice booking flights and navigating airports.</p>
+            </div>
 
-                                                                                                                                                        {/* Scrollable Content Area */}
-                                                                                                                                                                <div className="z-10 flex-1 flex flex-col gap-10">
-                                                                                                                                                                          
-                                                                                                                                                                                    {/* Activities Grid */}
-                                                                                                                                                                                              <div>
-                                                                                                                                                                                                          <h2 className="text-lg font-semibold text-slate-100 mb-5 tracking-wide flex items-center gap-2">
-                                                                                                                                                                                                                        <span>📚</span> Practice Modules
-                                                                                                                                                                                                                                    </h2>
-                                                                                                                                                                                                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                                                                                                                                                                                                              
-                                                                                                                                                                                                                                                                            {/* Activity Card 1 */}
-                                                                                                                                                                                                                                                                                          <div className="bg-white/10 backdrop-blur-md border border-white/10 p-5 rounded-2xl hover:bg-white/20 transition-all cursor-pointer group hover:-translate-y-1 shadow-lg">
-                                                                                                                                                                                                                                                                                                          <div className="text-3xl mb-3 group-hover:scale-110 transition-transform origin-left">✈️</div>
-                                                                                                                                                                                                                                                                                                                          <h3 className="text-md font-medium text-white mb-2">Travel & Tourism</h3>
-                                                                                                                                                                                                                                                                                                                                          <p className="text-xs text-slate-300 leading-relaxed">Practice booking flights, navigating airports, or planning family itineraries.</p>
-                                                                                                                                                                                                                                                                                                                                                        </div>
+            {/* Module Card */}
+            <div className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl hover:bg-slate-800 transition-all cursor-pointer group">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-xl">🍳</span>
+                <h3 className="text-sm font-bold text-white">Culinary Chat</h3>
+              </div>
+              <p className="text-xs text-slate-400 pl-8">Discuss recipes, cooking methods, and food.</p>
+            </div>
 
-                                                                                                                                                                                                                                                                                                                                                                      {/* Activity Card 2 */}
-                                                                                                                                                                                                                                                                                                                                                                                    <div className="bg-white/10 backdrop-blur-md border border-white/10 p-5 rounded-2xl hover:bg-white/20 transition-all cursor-pointer group hover:-translate-y-1 shadow-lg">
-                                                                                                                                                                                                                                                                                                                                                                                                    <div className="text-3xl mb-3 group-hover:scale-110 transition-transform origin-left">🍳</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                    <h3 className="text-md font-medium text-white mb-2">Culinary Chat</h3>
-                                                                                                                                                                                                                                                                                                                                                                                                                                    <p className="text-xs text-slate-300 leading-relaxed">Discuss high-protein recipes, cooking methods, and grocery shopping.</p>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                  </div>
+            {/* Module Card */}
+            <div className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl hover:bg-slate-800 transition-all cursor-pointer group">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-xl">💼</span>
+                <h3 className="text-sm font-bold text-white">Professional</h3>
+              </div>
+              <p className="text-xs text-slate-400 pl-8">Sharpen workplace communication skills.</p>
+            </div>
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                {/* Activity Card 3 */}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <div className="bg-white/10 backdrop-blur-md border border-white/10 p-5 rounded-2xl hover:bg-white/20 transition-all cursor-pointer group hover:-translate-y-1 shadow-lg">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <div className="text-3xl mb-3 group-hover:scale-110 transition-transform origin-left">💼</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <h3 className="text-md font-medium text-white mb-2">Professional</h3>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <p className="text-xs text-slate-300 leading-relaxed">Sharpen your workplace communication and negotiation skills.</p>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            </div>
+            {/* Module Card */}
+            <div className="bg-slate-800/60 border border-slate-700/60 p-4 rounded-xl hover:bg-slate-800 transition-all cursor-pointer group">
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-xl">💬</span>
+                <h3 className="text-sm font-bold text-white">Free Talk</h3>
+              </div>
+              <p className="text-xs text-slate-400 pl-8">Casual conversation with real-time feedback.</p>
+            </div>
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          {/* Activity Card 4 */}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div className="bg-white/10 backdrop-blur-md border border-white/10 p-5 rounded-2xl hover:bg-white/20 transition-all cursor-pointer group hover:-translate-y-1 shadow-lg">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div className="text-3xl mb-3 group-hover:scale-110 transition-transform origin-left">💬</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <h3 className="text-md font-medium text-white mb-2">Free Talk</h3>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <p className="text-xs text-slate-300 leading-relaxed">Casual conversation on any topic with real-time grammar feedback.</p>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      </div>
+          </div>
+        </div>
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            </div>
+        {/* Session Options */}
+        <div className="flex flex-col gap-3">
+           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+             <span>⚙️</span> Session Options
+           </h2>
+           <div className="bg-slate-800/40 border border-slate-700/50 rounded-xl p-2 flex flex-col gap-1">
+              <div className="flex items-center justify-between p-2.5 rounded-lg text-sm text-slate-300">
+                <span className="flex items-center gap-2">🎯 Fluency Level</span>
+                <span className="text-indigo-400 text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-md">Intermediate</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg text-sm text-slate-300">
+                <span className="flex items-center gap-2">🎙️ Accent Focus</span>
+                <span className="text-indigo-400 text-xs font-semibold bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-md">American</span>
+              </div>
+           </div>
+        </div>
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      {/* Quick Options */}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                <div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             <h2 className="text-lg font-semibold text-slate-100 mb-5 tracking-wide flex items-center gap-2">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <span>⚙️</span> Session Options
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         </h2>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <div className="bg-white/5 border border-white/10 rounded-2xl p-2 flex flex-col gap-1 shadow-lg backdrop-blur-sm">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      <div className="flex items-center justify-between p-3 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-slate-200">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        <div className="flex items-center gap-3 text-sm font-medium"><span className="text-lg">🎯</span> Fluency Level</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <span className="text-indigo-300 text-xs font-bold bg-indigo-500/20 border border-indigo-500/30 px-3 py-1.5 rounded-full">Intermediate</span>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          <div className="flex items-center justify-between p-3 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-slate-200">
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            <div className="flex items-center gap-3 text-sm font-medium"><span className="text-lg">🎙️</span> Accent Focus</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <span className="text-indigo-300 text-xs font-bold bg-indigo-500/20 border border-indigo-500/30 px-3 py-1.5 rounded-full">American</span>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              </div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              <div className="flex items-center justify-between p-3 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-slate-200">
+      </div>
+
+      {/* Right Side - Interactive Chat Interface */}
+      <div className="w-full lg:w-[58%] p-4 md:p-8 flex flex-col justify-center items-center bg-slate-950">
+        
+        <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[650px]">
+
+          {/* Chat Header */}
+          <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/90">
+            <div>
+              <h2 className="text-sm font-bold text-white">Live Session: Free Talk</h2>
+              <p className="text-[10px] text-emerald-400 font-medium flex items-center gap-1.5 mt-0.5 uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Listening
+              </p>
+            </div>
+            <div className="flex gap-1.5">
+              <button className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 hover:bg-slate-700 text-xs">
+                 📝
+              </button>
+              <button className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 hover:bg-slate-700 text-xs">
+                 🛑
+              </button>
+            </div>
+          </div>
+
+          {/* Chat History Area */}
+          <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-4 bg-slate-950/40">
+            
+            {/* AI Message */}
+            <div className="flex gap-2.5 max-w-[85%]">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white">
+                AI
+              </div>
+              <div className="bg-slate-800 border border-slate-700/60 p-3 rounded-xl rounded-tl-none text-slate-200 text-xs leading-relaxed shadow-sm">
+                Hello! I'm your English Coach. I see you've selected "Free Talk". What's on your mind today?
+              </div>
+            </div>
+
+            {/* User Message */}
+            <div className="flex gap-2.5 max-w-[85%] self-end flex-row-reverse">
+              <div className="w-7 h-7 rounded-full bg-slate-700 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white">
+                You
+              </div>
+              <div className="bg-indigo-600 p-3 rounded-xl rounded-tr-none text-white text-xs leading-relaxed shadow-md">
+                I just wanted to practice some general conversation and get feedback on my pronunciation.
+              </div>
+            </div>
+            
+            {/* AI Message */}
+            <div className="flex gap-2.5 max-w-[85%]">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-cyan-500 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white">
+                AI
+              </div>
+              <div className="bg-slate-800 border border-slate-700/60 p-3 rounded-xl rounded-tl-none text-slate-200 text-xs leading-relaxed shadow-sm">
+                That sounds great! Your sentence structure is perfect. Let's keep going. Tell me a bit about what you did over the weekend.
+              </div>
+            </div>
+          </div>
+
+          {/* Microphone Control Area */}
+          <div className="p-4 bg-slate-900 border-t border-slate-800 flex flex-col items-center justify-center">
+            <button className="w-full py-3 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 rounded-xl text-white font-semibold text-sm shadow-lg shadow-indigo-600/20 transition-all flex items-center justify-center gap-2">
+              <span>🎤</span> Hold to Speak
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  );
+}
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     <div className="flex items-center justify-between p-3 hover:bg-white/10 rounded-xl transition-colors cursor-pointer text-slate-200">
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 <div className="flex items-center gap-3 text-sm font-medium"><span className="text-lg">⏱️</span> Session Timer</div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   <span className="text-indigo-300 text-xs font-bold bg-indigo-500/20 border border-indigo-500/30 px-3 py-1.5 rounded-full">15 Mins</span>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   </div>
