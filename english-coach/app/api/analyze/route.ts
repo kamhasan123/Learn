@@ -1,37 +1,50 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
-// This initializes OpenAI using the hidden key in your .env.local file
+// Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
 export async function POST(req: Request) {
   try {
+    // Parse the incoming request body
     const { text, type } = await req.json();
 
-    // Give the AI its personality and instructions based on the tab selected
-    let systemPrompt = "You are a friendly, encouraging, and expert English language coach. Keep your responses conversational, helpful, and concise.";
-    
+    // Default system prompt
+    let systemPrompt = "You are a friendly, encouraging English language coach. Review the user's text, correct any grammar or spelling mistakes, and provide helpful feedback in a positive tone.";
+
+    // Adjust prompt based on type if needed
     if (type === "grammar") {
-      systemPrompt = "You are a strict but encouraging English grammar coach. Review the user's text, correct any spelling or grammar mistakes, and briefly explain why the changes were made to help them improve.";
+      systemPrompt = "You are a strict but encouraging English grammar coach. Review the user's text, clearly point out any grammatical errors, and explain how to fix them.";
     }
 
     // Call the OpenAI API
     const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Fast and cost-effective model
+      model: "gpt-4o-mini", 
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: text }
       ],
     });
 
-    const aiFeedback = response.choices[0].message.content;
+    // Extract the AI's response safely using optional chaining
+    const aiFeedback = response.choices[0]?.message?.content || "No response received from AI.";
 
+    // Return the successful response as JSON
     return NextResponse.json({ success: true, feedback: aiFeedback });
-    
-  } catch (error) {
+
+  } catch (error: any) {
     console.error("OpenAI Error:", error);
-    return NextResponse.json({ success: false, message: "Server Error connecting to AI" }, { status: 500 });
+    
+    // Ensure we always return valid JSON even on error
+    return NextResponse.json(
+      { 
+        success: false, 
+        message: "Server Error connecting to AI", 
+        error: error?.message || "Unknown error"
+      }, 
+      { status: 500 }
+    );
   }
 }
