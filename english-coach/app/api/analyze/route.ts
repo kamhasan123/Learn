@@ -1,25 +1,37 @@
-
 import { NextResponse } from 'next/server';
+import OpenAI from 'openai';
+
+// This initializes OpenAI using the hidden key in your .env.local file
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { text, type } = body;
+    const { text, type } = await req.json();
 
-    // This is where we will eventually connect to the OpenAI API 
-    // to analyze grammar, score typing speed, or process handwriting OCR.
+    // Give the AI its personality and instructions based on the tab selected
+    let systemPrompt = "You are a friendly, encouraging, and expert English language coach. Keep your responses conversational, helpful, and concise.";
     
-    let aiFeedback = "";
-
     if (type === "grammar") {
-      aiFeedback = `I reviewed your text: "${text}". Your grammar is mostly correct, but consider using past tense here to improve the flow!`;
-    } else {
-      aiFeedback = "Received your input. Analyzing your English proficiency now...";
+      systemPrompt = "You are a strict but encouraging English grammar coach. Review the user's text, correct any spelling or grammar mistakes, and briefly explain why the changes were made to help them improve.";
     }
+
+    // Call the OpenAI API
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Fast and cost-effective model
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: text }
+      ],
+    });
+
+    const aiFeedback = response.choices[0].message.content;
 
     return NextResponse.json({ success: true, feedback: aiFeedback });
     
   } catch (error) {
-    return NextResponse.json({ success: false, message: "Server Error" }, { status: 500 });
+    console.error("OpenAI Error:", error);
+    return NextResponse.json({ success: false, message: "Server Error connecting to AI" }, { status: 500 });
   }
 }
