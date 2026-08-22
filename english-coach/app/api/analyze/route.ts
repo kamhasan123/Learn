@@ -4,69 +4,83 @@ import { GoogleGenAI } from '@google/genai';
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { text, audio, currentLevel = "Beginner", currentWeek = 1, mode = "curriculum", isInitialGreeting = false, chatHistory = [] } = body;
+    const { text, audio, image, currentLevel, currentWeek, currentDay, mode, personalizedPlan, isInitialGreeting, chatHistory } = body;
 
-    // Gather keys safely
     const apiKeys = [
-      process.env.GEMINI_API_KEY,
-      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY, 
+      process.env.GEMINI_API_KEY_2, 
       process.env.GEMINI_API_KEY_3
     ].filter(Boolean) as string[];
+    
+    let targetModels = ['gemini-2.5-flash', 'gemini-3.5-flash'];
 
-    if (apiKeys.length === 0) {
-      // Fallback response if keys are missing entirely so it doesn't throw "Failed to fetch"
-      return NextResponse.json({
-        success: true,
-        feedback: "Welcome! Let's start our lesson. (Note: Please check your API keys in .env.local)",
-        spokenReply: "Welcome! Let's start our lesson.",
-        performanceScore: 8,
-        suggestedAction: "MAINTAIN",
-        nextChallenge: "Say hello to begin.",
-        imageUrl: null,
-        aiImagePrompt: "",
-        detectedLevel: currentLevel
-      });
-    }
+    let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
+    CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
+    ${personalizedPlan ? `STUDENT'S CUSTOM ROADMAP: ${personalizedPlan}` : "No custom roadmap yet."}
+    
+    STRICT HARDWARE & REALITY CHECK RULES:
+    1. NO HALLUCINATIONS: Look at what the user actually provided in this current turn. 
+       - If no image was uploaded, DO NOT talk about an image, handwriting, or a photo. 
+       - If no audio was recorded, DO NOT claim you heard their voice file. 
+       - Only acknowledge the literal input (text, audio, or image) that is physically present in the request payload.
+    
+    2. ONE RESPONSE FIELD: Provide everything in the 'feedback' string.
+    3. THE CORRECTION LOOP & 5-TRY RULE: If the user makes a mistake, correct them and ask them to repeat it. If they fail 5 times, abort and pivot to an easier question.
+    
+    4. DYNAMIC MULTI-MODAL FLEXIBILITY: 
+       - Lessons can mix speaking, text comprehension, and handwriting turn-by-turn. Gracefully evaluate whatever input method the user actually uses in this turn.
 
-    const MODEL_TIERS = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+    5. WEEK 12+ ACCENT RULE: 
+       - Accent training and pronunciation tips are STRICTLY FORBIDDEN unless currentWeek >= 12 (or level >= 12). If week is under 12, focus exclusively on grammar, vocabulary, and basic sentence construction.
+       
+    6. HANDWRITING GRADING: 
+       - ONLY if an image is physically provided, give it a Grade from 1 to 100, explain errors, and update 'newPersonalizedPlan'.
 
-    let systemPrompt = `You are an elite, interactive English coach. Mode: ${mode.toUpperCase()} (Week ${currentWeek}, Level: ${currentLevel}). Reply naturally, correct grammar, and provide a conversational spoken reply and next challenge.`;
-
-    if (isInitialGreeting) {
-      systemPrompt = `You are a warm English coach. Start a session for mode: ${mode.toUpperCase()} (Week ${currentWeek}). Give a friendly greeting and ask your first question.`;
-    }
+    MODE-SPECIFIC RULES:
+    
+    A) If Mode is 'placementTest': 
+       - Have an energetic, clear conversation to gauge fluency. After 2-3 replies, output their numeric 'detectedLevel' (1-20) and a 'newPersonalizedPlan'. Tell them the test is complete so the tab can close.
+       
+    B) If Mode is 'curriculum':
+       - Use their 'STUDENT'S CUSTOM ROADMAP' to tailor today's lesson. Randomize scenarios. 20% of the time, provide a 1-word search term in 'imageKeyword'.
+       
+    C) If Mode is 'typing':
+       - KEYBOARD ONLY. Give them typing prompts, check their text accuracy, and give mechanical typing tips.
+       
+    D) If Mode is 'extraHelp':
+       - Act as an energetic free-form tutor.`;
 
     const contents: any[] = [];
+    
     if (Array.isArray(chatHistory)) {
       for (const msg of chatHistory) {
-        if (msg?.content) {
-          contents.push(msg.role === 'user' ? `User: ${msg.content}` : `Coach: ${msg.content}`);
-        }
+        if (msg?.content) contents.push(msg.role === 'user' ? `User: ${msg.content}` : `Coach: ${msg.content}`);
       }
     }
 
-    if (text && text.trim() !== "") {
-      contents.push(text);
-    } else if (audio) {
-      const match = audio.match(/^data:(.*?);base64,(.*)$/);
-      if (match) {
-        contents.push({
-          inlineData: { mimeType: match[1] || 'audio/webm', data: match[2] }
-        });
-        contents.push("The user sent a voice recording. Evaluate their speech, give feedback, and ask the next question.");
-      } else {
-        contents.push("The user sent a voice message. Evaluate and ask the next question.");
-      }
-    } else {
-      contents.push("Let's continue our lesson. Ask the next question.");
+    if (image) {
+      const match = image.match(/^data:(image\/.*?);base64,(.*)$/);
+      if (match) contents.push({ inlineData: { mimeType: match[1], data: match[2] } }, "Grade this handwriting from 1 to 100 and update the 'newPersonalizedPlan'.");
+    }
+    if (text) contents.push(`User text: ${text}`);
+    if (audio && mode !== 'typing') {
+      const match = audio.match(/^data:(audio\/.*?);base64,(.*)$/);
+      if (match) contents.push({ inlineData: { mimeType: match[1], data: match[2] } }, "User sent audio. Analyze grammar.");
+    }
+    
+    if (isInitialGreeting) {
+      if (mode === 'placementTest') contents.push("Start placement test with an exciting, welcoming text prompt asking about their background.");
+      else if (mode === 'curriculum') contents.push(`Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}.`);
+      else if (mode === 'typing') contents.push("Welcome to Typing Practice. Give them a short sentence to type out.");
+      else contents.push("Start Extra Help session.");
     }
 
     let response: any = null;
+    let lastError = null;
 
-    // Loop through keys and model tiers
     for (const key of apiKeys) {
       const ai = new GoogleGenAI({ apiKey: key });
-      for (const modelName of MODEL_TIERS) {
+      for (const modelName of targetModels) {
         try {
           response = await ai.models.generateContent({
             model: modelName,
@@ -78,46 +92,42 @@ export async function POST(req: Request) {
                 type: "OBJECT",
                 properties: {
                   feedback: { type: "STRING" },
-                  spokenReply: { type: "STRING" },
-                  performanceScore: { type: "NUMBER" },
-                  suggestedAction: { type: "STRING" },
-                  nextChallenge: { type: "STRING" },
-                  aiImagePrompt: { type: "STRING" },
-                  detectedLevel: { type: "STRING" }
+                  imageKeyword: { type: "STRING" },
+                  progressBump: { type: "NUMBER" },
+                  detectedLevel: { type: "NUMBER" },
+                  newPersonalizedPlan: { type: "STRING" }
                 },
-                required: ["feedback", "spokenReply", "performanceScore", "suggestedAction", "nextChallenge", "aiImagePrompt", "detectedLevel"]
+                required: ["feedback", "imageKeyword", "progressBump"]
               }
             },
           });
-          if (response && response.text) break;
-        } catch (err) {
-          // Try next model/key silently
+          if (response?.text) break;
+        } catch (err) { 
+          lastError = err; 
         }
       }
-      if (response && response.text) break;
+      if (response?.text) break;
     }
 
     if (!response || !response.text) {
-      throw new Error("All model tiers and keys failed.");
+      throw lastError || new Error("All API Keys and AI models failed.");
     }
 
-    const resultData = JSON.parse(response.text);
-    resultData.imageUrl = null;
+    let rawText = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const resultData = JSON.parse(rawText);
+
+    if (resultData.imageKeyword && resultData.imageKeyword.length > 2) {
+      resultData.webImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(resultData.imageKeyword)}?width=800&height=600&nologo=true`;
+    }
 
     return NextResponse.json({ success: true, ...resultData });
 
   } catch (error: any) {
-    console.error("API Route Error:", error);
+    console.error("CRITICAL BACKEND ERROR:", error);
     return NextResponse.json({ 
       success: true, 
-      feedback: "Let's keep building on our lesson! What would you like to say next?", 
-      spokenReply: "Let's keep building on our lesson!", 
-      performanceScore: 8, 
-      suggestedAction: "MAINTAIN", 
-      nextChallenge: "Provide your next response.", 
-      imageUrl: null,
-      aiImagePrompt: "",
-      detectedLevel: "Beginner" 
+      feedback: `Let's keep going! What would you like to say next?`, 
+      progressBump: 0 
     });
   }
 }
