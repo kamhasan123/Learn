@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-<<<<<<< HEAD
+
 
 interface Message {
   role: 'ai' | 'user';
@@ -61,7 +61,6 @@ export default function InteractiveCoachPage() {
       const updateVoices = () => {
         const availableVoices = window.speechSynthesis.getVoices();
         setVoices(availableVoices);
-<<<<<<< HEAD
         
         if (availableVoices.length > 0 && !selectedVoice) {
           const energeticVoice = 
@@ -75,7 +74,6 @@ export default function InteractiveCoachPage() {
         }
       };
       
-=======
         if (availableVoices.length > 0 && !selectedVoice) {
           // Default to a natural English voice if possible
           const defaultVoice = availableVoices.find(v => v.lang.startsWith('en')) || availableVoices[0];
@@ -83,13 +81,12 @@ export default function InteractiveCoachPage() {
         }
       };
 
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
       updateVoices();
       window.speechSynthesis.onvoiceschanged = updateVoices;
     }
   }, []);
 
-<<<<<<< HEAD
+
   // 🗣️ Upgraded High-Energy, Clear, and Engaging Voice Engine
   const speakText = (text: string) => {
     if (!text || !('speechSynthesis' in window)) return;
@@ -113,7 +110,6 @@ export default function InteractiveCoachPage() {
 
   const startSession = async () => {
     setSessionActive(true);
-=======
   // Function to trigger browser text-to-speech for voice feedback
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
@@ -137,7 +133,6 @@ export default function InteractiveCoachPage() {
   const startSession = async (selectedMode = 'curriculum') => {
     setSessionActive(true);
     setMode(selectedMode);
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
     setIsLoading(true);
     setMessages([]);
 
@@ -147,30 +142,28 @@ export default function InteractiveCoachPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           isInitialGreeting: true,
-<<<<<<< HEAD
+
           mode: activeTab,
           currentWeek,
           currentDay,
           currentLevel,
           personalizedPlan,
-=======
+
           mode: selectedMode,
           currentWeek,
           currentLevel,
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
           chatHistory: []
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-<<<<<<< HEAD
+
         setMessages([{ role: 'ai', content: data.feedback, imageUrl: data.webImageUrl || null }]);
         speakText(data.feedback);
       }
     } catch (err) {
       console.error("Error starting session", err);
-=======
         const initialMsg = data.feedback || data.spokenReply || "Hello! Let's begin our lesson.";
         setMessages([{ role: 'ai', content: initialMsg, imageUrl: data.imageUrl || null }]);
         speakText(data.spokenReply || initialMsg);
@@ -180,13 +173,12 @@ export default function InteractiveCoachPage() {
       const fallbackMsg = "Welcome! Let's start our lesson. What would you like to say?";
       setMessages([{ role: 'ai', content: fallbackMsg, imageUrl: null }]);
       speakText(fallbackMsg);
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
     } finally {
       setIsLoading(false);
     }
   };
 
-<<<<<<< HEAD
+
   const handleSendMessage = async (payloadContent: { text?: string; audio?: string; image?: string }) => {
     if (isLoading) return;
 
@@ -194,14 +186,13 @@ export default function InteractiveCoachPage() {
     if (payloadContent.image) userDisplayText = "[Image Uploaded]";
 
     const newHistory = [...messages, { role: 'user' as const, content: userDisplayText, imageUrl: payloadContent.image || null }];
-=======
   // Send user message (text or voice) to backend
   const handleSendMessage = async (payloadContent: { text?: string; audio?: string }) => {
     if (isLoading) return;
 
     const userDisplayText = payloadContent.text || "[Voice Message]";
     const newHistory = [...messages, { role: 'user' as const, content: userDisplayText, imageUrl: null }];
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
+
     setMessages(newHistory);
     setInputText('');
     setIsLoading(true);
@@ -213,25 +204,23 @@ export default function InteractiveCoachPage() {
         body: JSON.stringify({
           text: payloadContent.text,
           audio: payloadContent.audio,
-<<<<<<< HEAD
+
           image: payloadContent.image,
           currentLevel,
           currentWeek,
           currentDay,
           mode: activeTab,
           personalizedPlan,
-=======
           currentLevel,
           currentWeek,
           mode,
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
           chatHistory: newHistory
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-<<<<<<< HEAD
+<<<<<
         setMessages(prev => [...prev, { role: 'ai', content: data.feedback, imageUrl: data.webImageUrl || null }]);
         speakText(data.feedback);
         
@@ -246,7 +235,7 @@ export default function InteractiveCoachPage() {
       }
     } catch (err) {
       speakText("Let's try that again! Please repeat your response for me.");
-=======
+=====
         const aiMessage = data.feedback || data.nextChallenge;
         setMessages(prev => [...prev, { role: 'ai', content: aiMessage, imageUrl: data.imageUrl || null }]);
         
@@ -270,24 +259,22 @@ export default function InteractiveCoachPage() {
     }
   };
 
-<<<<<<< HEAD
   const startRecording = async () => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
 
-=======
   // Voice recording handlers
   const startRecording = async () => {
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
+
     audioChunksRef.current = [];
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
-<<<<<<< HEAD
+
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-=======
+
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -295,12 +282,11 @@ export default function InteractiveCoachPage() {
         }
       };
 
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
         reader.readAsDataURL(audioBlob);
-<<<<<<< HEAD
+
         reader.onloadend = () => handleSendMessage({ audio: reader.result as string });
       };
       mediaRecorder.start();
@@ -308,7 +294,6 @@ export default function InteractiveCoachPage() {
     } catch (err) { alert("Could not access microphone."); }
   };
   
-=======
         reader.onloadend = () => {
           const base64Audio = reader.result as string;
           handleSendMessage({ audio: base64Audio });
@@ -323,12 +308,11 @@ export default function InteractiveCoachPage() {
     }
   };
 
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-<<<<<<< HEAD
+
       mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
     }
   };
@@ -340,15 +324,14 @@ export default function InteractiveCoachPage() {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onloadend = () => handleSendMessage({ image: reader.result as string });
-=======
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
+
     }
   };
 
   return (
     <div className="flex flex-col h-screen bg-[#0b0f19] text-white font-sans">
-<<<<<<< HEAD
+
       <header className="px-6 pt-4 pb-0 border-b border-gray-800 bg-[#111827]">
         <div className="flex flex-wrap justify-between items-center mb-4">
           <div className="flex items-center space-x-3">
@@ -399,7 +382,7 @@ export default function InteractiveCoachPage() {
         {!sessionActive ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <button onClick={startSession} className="px-8 py-3 bg-indigo-600 rounded-xl font-bold hover:bg-indigo-500 shadow-lg shadow-indigo-500/30">START {activeTab.toUpperCase()}</button>
-=======
+
       {/* Top Bar */}
       <header className="flex flex-wrap items-center justify-between px-6 py-4 border-b border-gray-800 bg-[#111827] gap-3">
         <div className="flex items-center space-x-3">
@@ -440,12 +423,11 @@ export default function InteractiveCoachPage() {
                 START INTERACTIVE SESSION
               </button>
             </div>
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
           </div>
         ) : (
           <div className="space-y-4 pb-24">
             {messages.map((msg, index) => (
-<<<<<<< HEAD
+
               <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                 <div className={`max-w-[85%] rounded-2xl px-5 py-3.5 text-sm ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-[#1f2937] border border-gray-700 text-gray-100 rounded-bl-none'}`}>
                   <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -453,8 +435,8 @@ export default function InteractiveCoachPage() {
                 </div>
               </div>
             ))}
-            {isLoading && <div className="text-sm text-gray-500 animate-pulse">Mr. Handsome is getting excited...</div>}
-=======
+          {isLoading && <div className="text-sm text-gray-500 animate-pulse">Mr. Handsome is getting excited...</div>}
+
               <div
                 key={index}
                 className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
@@ -487,12 +469,12 @@ export default function InteractiveCoachPage() {
                 </div>
               </div>
             )}
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
+
           </div>
         )}
       </main>
 
-<<<<<<< HEAD
+
       {sessionActive && (
         <footer className="sticky bottom-0 bg-[#111827] border-t border-gray-800 p-4">
           <div className="max-w-4xl mx-auto flex items-center space-x-2">
@@ -523,7 +505,7 @@ export default function InteractiveCoachPage() {
                 handleSendMessage({ text: inputText.trim() }); 
               } 
             }} className="p-3 bg-indigo-600 rounded-xl">▶</button>
-=======
+
       {/* Input Footer Bar */}
       {sessionActive && (
         <footer className="sticky bottom-0 bg-[#111827] border-t border-gray-800 p-4">
@@ -568,7 +550,7 @@ export default function InteractiveCoachPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14M12 5l7 7-7 7" />
               </svg>
             </button>
->>>>>>> cb37e3f0a9a22bce9c1eb7c755f4a4e98b662ff4
+
           </div>
         </footer>
       )}
