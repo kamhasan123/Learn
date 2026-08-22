@@ -1,185 +1,318 @@
-"use client";
-import { useState, useRef, FormEvent } from "react";
+'use client';
 
-export default function Home() {
-  const [inputMode, setInputMode] = useState("voice"); 
-  const [assessmentStarted, setAssessmentStarted] = useState(false);
-  const [inputText, setInputText] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: "ai", content: "Welcome! Please submit your text, voice recording, or snap a photo of your handwriting for analysis." }
-  ]);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+import { useState, useEffect, useRef } from 'react';
 
-  // Robust function to handle sending messages and files
-  const handleSendMessage = async (e?: FormEvent) => {
-    if (e) e.preventDefault(); // Prevents page reload if triggered by the Enter key
+interface Message {
+  role: 'ai' | 'user';
+  content: string;
+  imageUrl?: string | null;
+}
 
-    console.log("Attempting to send message. Input text:", inputText, "File:", selectedFileName);
+export default function InteractiveCoachPage() {
+  const [sessionActive, setSessionActive] = useState<boolean>(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [currentLevel, setCurrentLevel] = useState<string>('Beginner');
+  const [currentWeek, setCurrentWeek] = useState<number>(1);
+  const [mode, setMode] = useState<string>('curriculum');
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState<string>('');
 
-    if (!inputText.trim() && !selectedFileName) {
-      console.log("Message blocked: No text or file provided.");
-      return;
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Load available browser voices for text-to-speech
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      const updateVoices = () => {
+        const availableVoices = window.speechSynthesis.getVoices();
+        setVoices(availableVoices);
+        if (availableVoices.length > 0 && !selectedVoice) {
+          // Default to a natural English voice if possible
+          const defaultVoice = availableVoices.find(v => v.lang.startsWith('en')) || availableVoices[0];
+          setSelectedVoice(defaultVoice.name);
+        }
+      };
+
+      updateVoices();
+      window.speechSynthesis.onvoiceschanged = updateVoices;
     }
+  }, []);
 
-    // Add user message to UI
-    const userContent = selectedFileName ? `[Attached File: ${selectedFileName}] ${inputText}` : inputText;
-    const newMessages = [...messages, { role: "user", content: userContent }];
-    
-    setMessages(newMessages);
-    setInputText("");
-    setSelectedFileName(null);
+  // Function to trigger browser text-to-speech for voice feedback
+  const speakText = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel(); // Stop any ongoing speech
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      if (selectedVoice) {
+        const voiceObj = voices.find(v => v.name === selectedVoice);
+        if (voiceObj) {
+          utterance.voice = voiceObj;
+        }
+      }
+
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  // Start session and fetch the initial greeting immediately
+  const startSession = async (selectedMode = 'curriculum') => {
+    setSessionActive(true);
+    setMode(selectedMode);
     setIsLoading(true);
+    setMessages([]);
 
     try {
-      console.log("Sending request to /api/analyze...");
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: userContent, type: inputMode }),
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          isInitialGreeting: true,
+          mode: selectedMode,
+          currentWeek,
+          currentLevel,
+          chatHistory: []
+        }),
       });
 
-      console.log("Response received. Status:", response.status);
-      const data = await response.json();
-
+      const data = await res.json();
       if (data.success) {
-        setMessages([...newMessages, { role: "ai", content: data.feedback }]);
-      } else {
-        setMessages([...newMessages, { role: "ai", content: "Oops, the AI returned an error: " + (data.message || "Unknown error") }]);
+        const initialMsg = data.feedback || data.spokenReply || "Hello! Let's begin our lesson.";
+        setMessages([{ role: 'ai', content: initialMsg, imageUrl: data.imageUrl || null }]);
+        speakText(data.spokenReply || initialMsg);
       }
-    } catch (error) {
-      console.error("Critical Network Error:", error);
-      setMessages([...newMessages, { role: "ai", content: "Network error. Please check your terminal to ensure the server is running." }]);
+    } catch (err) {
+      console.error("Failed to start session:", err);
+      const fallbackMsg = "Welcome! Let's start our lesson. What would you like to say?";
+      setMessages([{ role: 'ai', content: fallbackMsg, imageUrl: null }]);
+      speakText(fallbackMsg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Handle mobile camera and file uploads
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setSelectedFileName(e.target.files[0].name);
-      console.log("File selected:", e.target.files[0].name);
+  // Send user message (text or voice) to backend
+  const handleSendMessage = async (payloadContent: { text?: string; audio?: string }) => {
+    if (isLoading) return;
+
+    const userDisplayText = payloadContent.text || "[Voice Message]";
+    const newHistory = [...messages, { role: 'user' as const, content: userDisplayText, imageUrl: null }];
+    setMessages(newHistory);
+    setInputText('');
+    setIsLoading(true);
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: payloadContent.text,
+          audio: payloadContent.audio,
+          currentLevel,
+          currentWeek,
+          mode,
+          chatHistory: newHistory
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        const aiMessage = data.feedback || data.nextChallenge;
+        setMessages(prev => [...prev, { role: 'ai', content: aiMessage, imageUrl: data.imageUrl || null }]);
+        
+        // Speak response out loud using the selected voice
+        if (data.spokenReply) {
+          speakText(data.spokenReply);
+        }
+
+        if (data.detectedLevel) {
+          setCurrentLevel(data.detectedLevel);
+        }
+      }
+    } catch (err) {
+      console.error("Error communicating with coach:", err);
+      const errorMsg = "Let's try that again. Please repeat your response.";
+      setMessages(prev => [...prev, { role: 'ai', content: errorMsg, imageUrl: null }]);
+      speakText(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Voice recording handlers
+  const startRecording = async () => {
+    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64Audio = reader.result as string;
+          handleSendMessage({ audio: base64Audio });
+        };
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Microphone access denied or unavailable:", err);
+      alert("Could not access microphone.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
     }
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 font-sans text-slate-100 flex flex-col lg:flex-row">
-      {/* Left Side Dashboard */}
-      <div className="w-full lg:w-[42%] bg-slate-900 border-b lg:border-r border-slate-800 p-6 flex flex-col gap-6">
-        <h1 className="text-2xl font-extrabold text-white">
-          English <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">Coach</span>
-        </h1>
-        <div className="bg-indigo-900/30 border border-indigo-500/30 p-4 rounded-xl">
-          <h2 className="text-lg font-bold text-indigo-300">Curriculum Active</h2>
-          <p className="text-sm text-slate-300">Progressing through the 30-Week Mastery Plan.</p>
+    <div className="flex flex-col h-screen bg-[#0b0f19] text-white font-sans">
+      {/* Top Bar */}
+      <header className="flex flex-wrap items-center justify-between px-6 py-4 border-b border-gray-800 bg-[#111827] gap-3">
+        <div className="flex items-center space-x-3">
+          <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+          <h1 className="text-lg font-semibold tracking-wide">ENGLISH COACH</h1>
         </div>
-      </div>
-
-      {/* Right Side Chat Interface */}
-      <div className="w-full lg:w-[58%] p-4 flex flex-col justify-center items-center bg-slate-950">
-        <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl flex flex-col h-[650px] relative">
-          
-          {/* Tabs */}
-          <div className="flex border-b border-slate-800 bg-slate-900/90 p-2 gap-1 justify-center z-10">
-            <button onClick={() => setInputMode("voice")} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${inputMode === "voice" ? "bg-indigo-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800"}`}>🎤 Voice</button>
-            <button onClick={() => setInputMode("typing")} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${inputMode === "typing" ? "bg-indigo-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800"}`}>⌨️ Typing</button>
-            <button onClick={() => setInputMode("grammar")} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${inputMode === "grammar" ? "bg-indigo-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-800"}`}>📝 Handwriting</button>
+        
+        {/* Voice Selection Dropdown */}
+        <div className="flex items-center space-x-3">
+          <select
+            value={selectedVoice}
+            onChange={(e) => setSelectedVoice(e.target.value)}
+            className="bg-[#1f2937] border border-gray-700 text-xs text-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-500 max-w-[180px]"
+          >
+            {voices.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name} ({v.lang})
+              </option>
+            ))}
+          </select>
+          <div className="text-sm px-3 py-1 bg-indigo-950 border border-indigo-800 rounded-full text-indigo-300">
+            {currentLevel}
           </div>
+        </div>
+      </header>
 
-          {/* Chat History Area */}
-          <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-4 bg-slate-950/40 pb-32">
-            {!assessmentStarted ? (
-              <div className="flex-1 flex items-center justify-center text-center">
-                <button onClick={() => setAssessmentStarted(true)} className="px-8 py-3 bg-emerald-500 text-slate-950 hover:bg-emerald-400 font-bold rounded-full shadow-lg shadow-emerald-500/20 transition-all">
-                  Start Lesson
-                </button>
-              </div>
-            ) : (
-              messages.map((msg, index) => (
-                <div key={index} className={`flex gap-2.5 max-w-[85%] ${msg.role === "user" ? "self-end flex-row-reverse" : "self-start"}`}>
-                  <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white ${msg.role === "user" ? "bg-slate-700" : "bg-gradient-to-tr from-indigo-500 to-cyan-500"}`}>
-                    {msg.role === "user" ? "You" : "AI"}
-                  </div>
-                  <div className={`p-3 rounded-xl text-xs leading-relaxed shadow-sm ${msg.role === "user" ? "bg-indigo-600 text-white rounded-tr-none" : "bg-slate-800 border border-slate-700/60 text-slate-200 rounded-tl-none"}`}>
-                    {msg.content}
-                  </div>
-                </div>
-              ))
-            )}
-            {isLoading && (
-              <div className="self-start text-xs text-emerald-400 animate-pulse mt-2 ml-10">AI is thinking...</div>
-            )}
-          </div>
-
-          {/* Input Controls */}
-          {assessmentStarted && (
-            <div className="absolute bottom-0 left-0 right-0 p-4 bg-slate-900 border-t border-slate-800 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-              {inputMode === "typing" && (
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Type your message..."
-                    className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-indigo-500" 
-                  />
-                  <button type="submit" disabled={isLoading} className="px-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-colors disabled:opacity-50">
-                    Send
-                  </button>
-                </form>
-              )}
-
-              {inputMode === "grammar" && (
-                <div className="flex flex-col gap-3">
-                  {selectedFileName && (
-                    <div className="text-xs text-emerald-400 flex items-center gap-2">
-                      <span>📸 {selectedFileName} attached</span>
-                      <button onClick={() => setSelectedFileName(null)} className="text-slate-500 hover:text-red-400">✖</button>
-                    </div>
-                  )}
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1 flex flex-col gap-2">
-                      <textarea 
-                        value={inputText}
-                        onChange={(e) => setInputText(e.target.value)}
-                        placeholder="Type text or upload a photo of your handwriting..."
-                        className="w-full h-14 bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-indigo-500 resize-none"
-                      />
-                      {/* Mobile Camera / File Input Trigger */}
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        capture="environment" 
-                        className="hidden" 
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                      />
-                      <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="self-start px-3 py-1.5 bg-slate-800 text-slate-300 text-xs rounded-lg hover:bg-slate-700 transition-colors flex items-center gap-2 border border-slate-700"
-                      >
-                        📷 Open Camera
-                      </button>
-                    </div>
-                    <button onClick={() => handleSendMessage()} disabled={isLoading} className="h-14 px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors disabled:opacity-50">
-                      Send
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {inputMode === "voice" && (
-                <button className="w-full py-4 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 font-bold text-sm">
-                  🎙️ Hold to Speak (Requires Audio API setup)
-                </button>
-              )}
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 max-w-4xl w-full mx-auto">
+        {!sessionActive ? (
+          <div className="flex flex-col items-center justify-center h-full space-y-6 text-center">
+            <div className="p-8 bg-[#111827] border border-gray-800 rounded-2xl shadow-xl max-w-md w-full space-y-4">
+              <h2 className="text-xl font-bold">Ready to begin your session?</h2>
+              <p className="text-gray-400 text-sm">Your coach is prepared with custom exercises, live audio corrections, and spoken guidance.</p>
+              <button
+                onClick={() => startSession('curriculum')}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition shadow-lg shadow-indigo-600/30"
+              >
+                START INTERACTIVE SESSION
+              </button>
             </div>
-          )}
-        </div>
-      </div>
-    </main>
+          </div>
+        ) : (
+          <div className="space-y-4 pb-24">
+            {messages.map((msg, index) => (
+              <div
+                key={index}
+                className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+              >
+                <div
+                  className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-md ${
+                    msg.role === 'user'
+                      ? 'bg-indigo-600 text-white rounded-br-none'
+                      : 'bg-[#1f2937] border border-gray-700/60 text-gray-100 rounded-bl-none'
+                  }`}
+                >
+                  <span className="block text-[10px] uppercase tracking-wider text-gray-400 mb-1 font-bold">
+                    {msg.role === 'user' ? 'You' : 'Coach'}
+                  </span>
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {msg.imageUrl && (
+                    <img
+                      src={msg.imageUrl}
+                      alt="Lesson visual"
+                      className="mt-3 rounded-xl max-h-64 object-cover w-full border border-gray-700"
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+            {isLoading && (
+              <div className="flex items-start">
+                <div className="bg-[#1f2937] border border-gray-700/60 rounded-2xl px-5 py-3.5 text-sm text-gray-400 animate-pulse">
+                  Coach is analyzing your speech and structuring feedback...
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Input Footer Bar */}
+      {sessionActive && (
+        <footer className="sticky bottom-0 bg-[#111827] border-t border-gray-800 p-4">
+          <div className="max-w-4xl mx-auto flex items-center space-x-3">
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && inputText.trim() && !isLoading) {
+                  handleSendMessage({ text: inputText.trim() });
+                }
+              }}
+              placeholder="Type your answer, or hold mic to speak..."
+              className="flex-1 bg-[#1f2937] border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+              disabled={isLoading}
+            />
+            <button
+              onMouseDown={startRecording}
+              onMouseUp={stopRecording}
+              onTouchStart={startRecording}
+              onTouchEnd={stopRecording}
+              className={`px-5 py-3 rounded-xl font-medium text-sm flex items-center space-x-2 transition select-none ${
+                isRecording
+                  ? 'bg-red-600 text-white animate-pulse shadow-lg shadow-red-600/40'
+                  : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/30'
+              }`}
+              title="Hold to speak"
+            >
+              <span>{isRecording ? 'RECORDING...' : 'HOLD TO SPEAK'}</span>
+            </button>
+            <button
+              onClick={() => {
+                if (inputText.trim() && !isLoading) {
+                  handleSendMessage({ text: inputText.trim() });
+                }
+              }}
+              disabled={isLoading || !inputText.trim()}
+              className="p-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl transition"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </footer>
+      )}
+    </div>
   );
 }
