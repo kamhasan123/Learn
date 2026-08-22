@@ -40,7 +40,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // Handle text or incoming base64 voice recordings on the backend
     if (text && text.trim() !== "" && !text.startsWith("Current Challenge:")) {
       contents.push(text);
     } else if (audio) {
@@ -135,5 +134,4 @@ export async function POST(req: Request) {
       detectedLevel: "Beginner" 
     });
   }
-
-
+}
