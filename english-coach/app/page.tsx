@@ -9,55 +9,99 @@ interface Message {
 }
 
 export default function InteractiveCoachPage() {
-  const [activeTab, setActiveTab] = useState<'curriculum' | 'typing' | 'extraHelp'>('curriculum');
+  const [activeTab, setActiveTab] = useState<'curriculum' | 'extraHelp' | 'placementTest' | 'typing'>('placementTest');
   const [sessionActive, setSessionActive] = useState<boolean>(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRecording, setIsRecording] = useState<boolean>(false);
   
-  // Progress & State
   const [currentLevel, setCurrentLevel] = useState<string>('Beginner');
   const [currentWeek, setCurrentWeek] = useState<number>(1);
   const [currentDay, setCurrentDay] = useState<number>(1);
   const [progressPct, setProgressPct] = useState<number>(10);
-  const [personalizedPlan, setPersonalizedPlan] = useState<string | null>(null);
+  const [personalizedPlan, setPersonalizedPlan] = useState<string | null>(null); 
   const [mode, setMode] = useState<string>('curriculum');
-  const [placementCompleted, setPlacementCompleted] = useState<boolean>(false);
-
-  // Load saved progress when app opens
+    // 1. Load saved data when the app opens
   useEffect(() => {
     const savedLevel = localStorage.getItem('coachLevel');
     const savedWeek = localStorage.getItem('coachWeek');
     const savedDay = localStorage.getItem('coachDay');
     const savedPlan = localStorage.getItem('coachPlan');
-    const savedPlacementDone = localStorage.getItem('coachPlacementDone');
 
     if (savedLevel) setCurrentLevel(savedLevel);
     if (savedWeek) setCurrentWeek(Number(savedWeek));
     if (savedDay) setCurrentDay(Number(savedDay));
     if (savedPlan) setPersonalizedPlan(savedPlan);
-    if (savedPlacementDone === 'true') {
-      setPlacementCompleted(true);
-    } else {
-      // If never taken, start on placement test mode
-      setMode('placementTest');
-    }
   }, []);
 
-  // Save data to memory whenever it changes
+  // 2. Save data to memory whenever it changes
   useEffect(() => {
     localStorage.setItem('coachLevel', currentLevel);
     localStorage.setItem('coachWeek', currentWeek.toString());
     localStorage.setItem('coachDay', currentDay.toString());
-    if (personalizedPlan) localStorage.setItem('coachPlan', personalizedPlan);
-    localStorage.setItem('coachPlacementDone', placementCompleted.toString());
-  }, [currentLevel, currentWeek, currentDay, personalizedPlan, placementCompleted]);
+    if (personalizedPlan) {
+      localStorage.setItem('coachPlan', personalizedPlan);
+    }
+  }, [currentLevel, currentWeek, currentDay, personalizedPlan]);
+  
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState<string>('');
 
-  const startSession = async (targetMode: string) => {
-    setMode(targetMode);
-    setActiveTab(targetMode === 'typing' ? 'typing' : targetMode === 'extraHelp' ? 'extraHelp' : 'curriculum');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isLoading]);
+
+  // Load available browser voices for text-to-speech
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      const updateVoices = () => {
+        const availableVoices = window.speechSynthesis.getVoices();
+        setVoices(availableVoices);
+        
+        if (availableVoices.length > 0 && !selectedVoice) {
+          const defaultVoice = availableVoices.find(v => v.lang.startsWith('en')) || availableVoices[0];
+          setSelectedVoice(defaultVoice.name);
+        }
+      };
+
+      updateVoices();
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, [selectedVoice]);
+
+  // 🗣️ Text-to-Speech Engine
+  const speakText = (text: string) => {
+    if (!text || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    
+    const cleanText = text.replace(/[*_~#-]/g, ''); 
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 0.90; 
+    utterance.pitch = 1.10; 
+    
+    if (selectedVoice) {
+      const voiceObj = voices.find(v => v.name === selectedVoice);
+      if (voiceObj) utterance.voice = voiceObj;
+    }
+    
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const startSession = async (selectedMode = 'curriculum') => {
     setSessionActive(true);
+    setMode(selectedMode);
     setIsLoading(true);
+    setMessages([]);
 
     try {
       const res = await fetch('/api/analyze', {
@@ -65,29 +109,41 @@ export default function InteractiveCoachPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           isInitialGreeting: true,
-          mode: targetMode,
-          currentLevel,
+          mode: selectedMode,
           currentWeek,
           currentDay,
-          personalizedPlan
-        })
+          currentLevel,
+          personalizedPlan,
+          chatHistory: []
+        }),
       });
+
       const data = await res.json();
       if (data.success) {
-        setMessages([{ role: 'ai', content: data.feedback, imageUrl: data.webImageUrl }]);
+        const initialMsg = data.feedback || data.spokenReply || "Hello! Let's begin our lesson.";
+        setMessages([{ role: 'ai', content: initialMsg, imageUrl: data.webImageUrl || data.imageUrl || null }]);
+        speakText(data.spokenReply || initialMsg);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to start session:", err);
+      const fallbackMsg = "Welcome! Let's start our lesson. What would you like to say?";
+      setMessages([{ role: 'ai', content: fallbackMsg, imageUrl: null }]);
+      speakText(fallbackMsg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSend = async () => {
-    if (!inputText.trim() && !isLoading) return;
-    const userMsg = inputText;
+  const handleSendMessage = async (payloadContent: { text?: string; audio?: string; image?: string }) => {
+    if (isLoading) return;
+
+    let userDisplayText = payloadContent.text || "[Voice Message]";
+    if (payloadContent.image) userDisplayText = "[Image Uploaded]";
+
+    const newHistory = [...messages, { role: 'user' as const, content: userDisplayText, imageUrl: payloadContent.image || null }];
+
+    setMessages(newHistory);
     setInputText('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     setIsLoading(true);
 
     try {
@@ -95,103 +151,227 @@ export default function InteractiveCoachPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text: userMsg,
-          mode,
+          text: payloadContent.text,
+          audio: payloadContent.audio,
+          image: payloadContent.image,
           currentLevel,
           currentWeek,
           currentDay,
+          mode: activeTab,
           personalizedPlan,
-          chatHistory: messages
-        })
+          chatHistory: newHistory
+        }),
       });
+
       const data = await res.json();
       if (data.success) {
-        if (mode === 'placementTest' && data.detectedLevel) {
-          setCurrentLevel(`Level ${data.detectedLevel}`);
-          if (data.newPersonalizedPlan) setPersonalizedPlan(data.newPersonalizedPlan);
-          setPlacementCompleted(true);
-          localStorage.setItem('coachPlacementDone', 'true');
+        const aiMessage = data.feedback || data.nextChallenge;
+        setMessages(prev => [...prev, { role: 'ai', content: aiMessage, imageUrl: data.webImageUrl || data.imageUrl || null }]);
+        
+        if (data.spokenReply || data.feedback) {
+          speakText(data.spokenReply || data.feedback);
         }
-        if (data.progressBump) {
-          setProgressPct(prev => Math.min(100, prev + data.progressBump));
+        
+        if (data.progressBump) setProgressPct(prev => Math.min(prev + data.progressBump, 100));
+        
+        if (data.detectedLevel) {
+          setCurrentLevel(data.detectedLevel);
+          if (activeTab === 'placementTest') setActiveTab('curriculum'); 
         }
-        setMessages(prev => [...prev, { role: 'ai', content: data.feedback, imageUrl: data.webImageUrl }]);
+        
+        if (data.newPersonalizedPlan) setPersonalizedPlan(data.newPersonalizedPlan);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error communicating with coach:", err);
+      speakText("Let's try that again! Please repeat your response for me.");
+      const errorMsg = "Let's try that again. Please repeat your response.";
+      setMessages(prev => [...prev, { role: 'ai', content: errorMsg, imageUrl: null }]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const startRecording = async () => {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    audioChunksRef.current = [];
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          handleSendMessage({ audio: reader.result as string });
+          stream.getTracks().forEach(track => track.stop());
+        };
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Microphone access denied:", err);
+      alert("Could not access microphone.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = () => handleSendMessage({ image: reader.result as string });
+    }
+  };
+
   return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>English Coach - Mr. Handsome</h2>
-        <div>
-          <span style={{ marginRight: '15px' }}><b>{currentLevel}</b> (Wk {currentWeek}, Day {currentDay})</span>
-          {placementCompleted && (
-            <button 
-              onClick={() => startSession('placementTest')}
-              style={{ padding: '6px 12px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+    <div className="flex flex-col h-screen bg-[#0b0f19] text-white font-sans">
+      <header className="px-6 pt-4 pb-0 border-b border-gray-800 bg-[#111827]">
+        <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
+          <div className="flex items-center space-x-3">
+            <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+            <h1 className="text-lg font-bold">ENGLISH COACH</h1>
+          </div>
+          <div className="flex items-center space-x-3">
+            <select
+              value={selectedVoice}
+              onChange={(e) => setSelectedVoice(e.target.value)}
+              className="bg-[#1f2937] border border-gray-700 text-xs text-gray-200 rounded p-1 max-w-[160px]"
             >
-              Retake Placement Test
-            </button>
-          )}
+              {voices.map(v => <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>)}
+            </select>
+            <div className="text-xs px-3 py-1 bg-indigo-950 border border-indigo-800 rounded-lg text-indigo-300 font-bold">
+              Level: {currentLevel}
+            </div>
+          </div>
         </div>
-      </div>
+        
+        <div className="flex space-x-6 border-b border-gray-700 overflow-x-auto whitespace-nowrap">
+          <button onClick={() => { setActiveTab('placementTest'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'placementTest' ? 'border-b-2 border-yellow-500 text-yellow-400' : 'text-gray-400'}`}>
+            🎯 Placement Test
+          </button>
+          <button onClick={() => { setActiveTab('curriculum'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'curriculum' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-gray-400'}`}>
+            📖 Daily Lesson
+          </button>
+          <button onClick={() => { setActiveTab('typing'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'typing' ? 'border-b-2 border-blue-500 text-blue-400' : 'text-gray-400'}`}>
+            ⌨️ Typing Practice
+          </button>
+          <button onClick={() => { setActiveTab('extraHelp'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'extraHelp' ? 'border-b-2 border-green-500 text-green-400' : 'text-gray-400'}`}>
+            🤝 Extra Help
+          </button>
+        </div>
+      </header>
 
-      {!sessionActive ? (
-        <div style={{ textAlign: 'center', padding: '40px', background: '#f9fafb', borderRadius: '8px' }}>
-          <h3>Welcome back! Pick up where you left off.</h3>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '20px' }}>
-            {!placementCompleted && (
-              <button onClick={() => startSession('placementTest')} style={{ padding: '10px 20px', fontSize: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                Take Placement Test
+      {sessionActive && activeTab === 'curriculum' && (
+        <div className="w-full bg-gray-800 h-1.5">
+          <div className="bg-indigo-500 h-1.5 transition-all duration-500" style={{ width: `${progressPct}%` }}></div>
+        </div>
+      )}
+
+      {activeTab === 'curriculum' && personalizedPlan && (
+        <div className="bg-indigo-900/40 border-b border-indigo-800 p-3 text-xs text-indigo-200 text-center">
+          <span className="font-bold">Your Custom Path:</span> {personalizedPlan}
+        </div>
+      )}
+
+      <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4 max-w-4xl w-full mx-auto">
+        {!sessionActive ? (
+          <div className="flex flex-col items-center justify-center h-full space-y-6 text-center">
+            <div className="p-8 bg-[#111827] border border-gray-800 rounded-2xl shadow-xl max-w-md w-full space-y-4">
+              <h2 className="text-xl font-bold">Ready to begin your session?</h2>
+              <p className="text-gray-400 text-sm">Your coach is prepared with custom exercises, live audio corrections, and spoken guidance.</p>
+              <button
+                onClick={() => startSession(activeTab)}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition shadow-lg shadow-indigo-600/30"
+              >
+                START {activeTab.toUpperCase()}
               </button>
-            )}
-            <button onClick={() => startSession('curriculum')} style={{ padding: '10px 20px', fontSize: '16px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-              Continue Daily Lesson (Week {currentWeek}, Day {currentDay})
-            </button>
-            <button onClick={() => startSession('typing')} style={{ padding: '10px 20px', fontSize: '16px', background: '#9333ea', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-              Typing Practice
-            </button>
-            <button onClick={() => startSession('extraHelp')} style={{ padding: '10px 20px', fontSize: '16px', background: '#d97706', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-              Extra Help / Homework
-            </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div>
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-            <button onClick={() => startSession('curriculum')} style={{ background: mode === 'curriculum' ? '#16a34a' : '#e5e7eb', color: mode === 'curriculum' ? '#fff' : '#000', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Daily Lesson</button>
-            <button onClick={() => startSession('typing')} style={{ background: mode === 'typing' ? '#9333ea' : '#e5e7eb', color: mode === 'typing' ? '#fff' : '#000', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Typing</button>
-            <button onClick={() => startSession('extraHelp')} style={{ background: mode === 'extraHelp' ? '#d97706' : '#e5e7eb', color: mode === 'extraHelp' ? '#fff' : '#000', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Extra Help</button>
-            <button onClick={() => setSessionActive(false)} style={{ marginLeft: 'auto', background: '#ef4444', color: '#fff', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Home Menu</button>
-          </div>
-
-          <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', height: '400px', overflowY: 'scroll', padding: '15px', background: '#fff', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {messages.map((m, idx) => (
-              <div key={idx} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? '#eff6ff' : '#f3f4f6', padding: '10px 14px', borderRadius: '8px', maxWidth: '75%' }}>
-                <p style={{ margin: 0 }}>{m.content}</p>
-                {m.imageUrl && <img src={m.imageUrl} alt="visual aid" style={{ marginTop: '10px', maxWidth: '100%', borderRadius: '6px' }} />}
+        ) : (
+          <div className="space-y-4 pb-24">
+            {messages.map((msg, index) => (
+              <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                <div className={`max-w-[85%] md:max-w-[75%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-md ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-[#1f2937] border border-gray-700/60 text-gray-100 rounded-bl-none'}`}>
+                  <span className="block text-[10px] uppercase tracking-wider text-gray-400 mb-1 font-bold">
+                    {msg.role === 'user' ? 'You' : 'Coach'}
+                  </span>
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {msg.imageUrl && (
+                    <img src={msg.imageUrl} alt="Upload" className="mt-3 rounded-xl max-h-64 object-cover w-full border border-gray-700" />
+                  )}
+                </div>
               </div>
             ))}
-            {isLoading && <p style={{ color: '#6b7280', fontStyle: 'italic' }}>Mr. Handsome is typing...</p>}
+            {isLoading && (
+              <div className="flex items-start">
+                <div className="bg-[#1f2937] border border-gray-700/60 rounded-2xl px-5 py-3.5 text-sm text-gray-400 animate-pulse">
+                  Coach is analyzing your speech and structuring feedback...
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
           </div>
+        )}
+      </main>
 
-          <div style={{ display: 'flex', marginTop: '15px', gap: '10px' }}>
+      {sessionActive && (
+        <footer className="sticky bottom-0 bg-[#111827] border-t border-gray-800 p-4">
+          <div className="max-w-4xl mx-auto flex items-center space-x-2">
+            <input type="file" accept="image/*" capture="environment" ref={fileInputRef} className="hidden" onChange={handleImageUpload} />
+            <button onClick={() => fileInputRef.current?.click()} className="p-3 bg-gray-800 hover:bg-gray-700 rounded-xl text-gray-400" title="Upload image">📸</button>
+
+            <button
+              onClick={isRecording ? stopRecording : startRecording}
+              className={`p-3 rounded-xl text-white transition ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}
+              title="Voice input"
+            >
+              🎙️
+            </button>
+
             <input 
               type="text" 
               value={inputText} 
-              onChange={e => setInputText(e.target.value)} 
-              onKeyDown={e => e.key === 'Enter' && handleSend()} 
-              placeholder="Type your response..." 
-              style={{ flex: 1, padding: '10px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+              onChange={(e) => setInputText(e.target.value)} 
+              onKeyDown={(e) => { 
+                if (e.key === 'Enter' && inputText.trim()) {
+                  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                  handleSendMessage({ text: inputText });
+                }
+              }}
+              placeholder="Type your message or response..." 
+              className="flex-1 bg-[#1f2937] border border-gray-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 text-white"
             />
-            <button onClick={handleSend} style={{ padding: '10px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Send</button>
+            
+            <button 
+              onClick={() => {
+                if (inputText.trim()) {
+                  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                  handleSendMessage({ text: inputText });
+                }
+              }}
+              disabled={isLoading || !inputText.trim()}
+              className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl font-medium text-sm transition shadow-lg shadow-indigo-600/20"
+            >
+              Send
+            </button>
           </div>
-        </div>
+        </footer>
       )}
     </div>
   );
