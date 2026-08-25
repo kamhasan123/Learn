@@ -21,58 +21,72 @@ export async function POST(req: Request) {
     STRICT HARDWARE & REALITY CHECK RULES:
     1. NO HALLUCINATIONS: Look at what the user actually provided in this current turn. 
        - If no image was uploaded, DO NOT talk about an image, handwriting, or a photo. 
-       - If no audio was recorded, DO NOT claim you heard their voice file. 
-       - Only acknowledge the literal input (text, audio, or image) that is physically present in the request payload.
+       - Only acknowledge the literal input that is physically present in the request.
     
     2. ONE RESPONSE FIELD: Provide everything in the 'feedback' string.
-    3. THE CORRECTION LOOP & 5-TRY RULE: If the user makes a mistake, correct them and ask them to repeat it. If they fail 5 times, abort and pivot to an easier question.
     
-    4. DYNAMIC MULTI-MODAL FLEXIBILITY: 
-       - Lessons can mix speaking, text comprehension, and handwriting turn-by-turn. Gracefully evaluate whatever input method the user actually uses in this turn.
-
-    5. WEEK 12+ ACCENT RULE: 
-       - Accent training and pronunciation tips are STRICTLY FORBIDDEN unless currentWeek >= 12 (or level >= 12). If week is under 12, focus exclusively on grammar, vocabulary, and basic sentence construction.
-       
-    6. HANDWRITING GRADING: 
-       - ONLY if an image is physically provided, give it a Grade from 1 to 100, explain errors, and update 'newPersonalizedPlan'.
+    3. DYNAMIC MULTI-MODAL FLEXIBILITY: 
+       - Lessons can mix speaking, text comprehension, and handwriting. Evaluate whatever input method is used.
 
     MODE-SPECIFIC RULES:
     
     A) If Mode is 'placementTest': 
-       - Have an energetic, clear conversation to gauge fluency. After 2-3 replies, output their numeric 'detectedLevel' (1-20) and a 'newPersonalizedPlan'. Tell them the test is complete so the tab can close.
+       - Have an energetic conversation to gauge fluency. Output their 'detectedLevel' and 'newPersonalizedPlan'. Tell them the test is complete.
        
     B) If Mode is 'curriculum':
        - Use their 'STUDENT'S CUSTOM ROADMAP' to tailor today's lesson. Randomize scenarios. 20% of the time, provide a 1-word search term in 'imageKeyword'.
        
     C) If Mode is 'typing':
-       - KEYBOARD ONLY. Give them typing prompts, check their text accuracy, and give mechanical typing tips.
+       - KEYBOARD ONLY. Give them typing prompts and check text accuracy.
        
     D) If Mode is 'extraHelp':
-       - Act as an energetic free-form tutor.`;
+       - THIS IS NOT A LESSON OR A TEST. Do not push a curriculum.
+       - Act exclusively as a homework helper and open-ended Q&A tutor. Wait for the user to ask a specific question, and provide direct, friendly assistance.`;
 
-    const contents: any[] = [];
-    
-    if (Array.isArray(chatHistory)) {
-      for (const msg of chatHistory) {
-        if (msg?.content) contents.push(msg.role === 'user' ? `User: ${msg.content}` : `Coach: ${msg.content}`);
-      }
+    const turnParts: any[] = [];
+
+    if (isInitialGreeting) {
+      if (mode === 'placementTest') turnParts.push({ text: "Start placement test with an exciting, welcoming text prompt asking about their background." });
+      else if (mode === 'curriculum') turnParts.push({ text: `Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}.` });
+      else if (mode === 'typing') turnParts.push({ text: "Welcome to Typing Practice. Give them a short sentence to type out." });
+      else turnParts.push({ text: "Introduce yourself as a homework helper ready to answer any specific English questions." });
     }
 
     if (image) {
       const match = image.match(/^data:(image\/.*?);base64,(.*)$/);
-      if (match) contents.push({ inlineData: { mimeType: match[1], data: match[2] } }, "Grade this handwriting from 1 to 100 and update the 'newPersonalizedPlan'.");
+      if (match) {
+         turnParts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+         turnParts.push({ text: "Grade this handwriting from 1 to 100, correct any mistakes, and update the 'newPersonalizedPlan'." });
+      }
     }
-    if (text) contents.push(`User text: ${text}`);
+
+    if (text) turnParts.push({ text: `User text: ${text}` });
+
     if (audio && mode !== 'typing') {
       const match = audio.match(/^data:(audio\/.*?);base64,(.*)$/);
-      if (match) contents.push({ inlineData: { mimeType: match[1], data: match[2] } }, "User sent audio. Analyze grammar.");
+      if (match) {
+         turnParts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+         turnParts.push({ text: "User sent audio. Analyze grammar and pronunciation." });
+      }
     }
-    
-    if (isInitialGreeting) {
-      if (mode === 'placementTest') contents.push("Start placement test with an exciting, welcoming text prompt asking about their background.");
-      else if (mode === 'curriculum') contents.push(`Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}.`);
-      else if (mode === 'typing') contents.push("Welcome to Typing Practice. Give them a short sentence to type out.");
-      else contents.push("Start Extra Help session.");
+
+    const finalContents: any[] = [];
+
+    if (Array.isArray(chatHistory)) {
+      for (const msg of chatHistory) {
+        if (msg?.content) {
+           finalContents.push({
+             role: msg.role === 'user' ? 'user' : 'model',
+             parts: [{ text: msg.content }]
+           });
+        }
+      }
+    }
+
+    if (turnParts.length > 0) {
+       finalContents.push({ role: 'user', parts: turnParts });
+    } else if (finalContents.length === 0) {
+       finalContents.push({ role: 'user', parts: [{ text: "Hello" }] });
     }
 
     let response: any = null;
@@ -84,7 +98,7 @@ export async function POST(req: Request) {
         try {
           response = await ai.models.generateContent({
             model: modelName,
-            contents: contents,
+            contents: finalContents,
             config: {
               systemInstruction: systemPrompt,
               responseMimeType: "application/json",
