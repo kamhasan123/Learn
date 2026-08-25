@@ -6,41 +6,42 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { text, audio, image, currentLevel, currentWeek, currentDay, mode, personalizedPlan, isInitialGreeting, chatHistory } = body;
 
-    const apiKeys = [
+    const activeApiKey = [
       process.env.GEMINI_API_KEY, 
       process.env.GEMINI_API_KEY_2, 
       process.env.GEMINI_API_KEY_3
-    ].filter(Boolean) as string[];
-    
-    // Dynamic AI Power Allocation: Heavy tasks (Images, Placement) route to Pro model first; light tasks route to Flash models.
-    const isHeavyTask = Boolean(image) || mode === 'placementTest';
-    let targetModels = isHeavyTask 
-      ? ['gemini-1.5-pro', 'gemini-3.7-flash', 'gemini-3.6-flash'] 
-      : ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-1.5-pro'];
+    ].find(Boolean);
+
+    if (!activeApiKey) {
+      throw new Error("No valid API keys found in Vercel Environment Variables.");
+    }
+
+    // STRICTLY forced to the fastest, lowest-cost flash model
+    const targetModel = 'gemini-1.5-flash';
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
     ${personalizedPlan ? `STUDENT'S CUSTOM ROADMAP: ${personalizedPlan}` : "No custom roadmap yet."}
     
     CORE PEDAGOGICAL RULES FROM SYSTEM ARCHITECTURE:
-    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question[span_0](start_span)[span_0](end_span).
-    2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, shift grading criteria away from basic vocabulary to heavily enforce American accent rules (flap T, schwa sounds, and linking consonants)[span_1](start_span)[span_1](end_span).
-    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, grade strictly (1-100), correct syntax, and update 'newPersonalizedPlan' to target these exact weaknesses in tomorrow's lesson[span_2](start_span)[span_2](end_span).
+    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question.
+    2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, shift grading criteria away from basic vocabulary to heavily enforce American accent rules.
+    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, grade strictly (1-100), correct syntax, and update 'newPersonalizedPlan'.
 
     DYNAMIC HOMEWORK & BANGLA ROAST RULE:
     - During 'curriculum' mode, organically generate a short, custom written homework exercise tailored directly to today's lesson topic.
     - Ask the user to write their answer down on paper and upload a photo using the camera button (📸).
-    - If they respond without uploading an image or completing the writing exercise, playfully roast them with funny jokes mixed in **Bangla** (written in Bengali script or phonetic English letters, like "Ki re bhai, lekha chara ki cholche?" or teasing them about being lazy) to make them feel playfully bad and push them to write it down, but keep the lesson moving forward.
+    - If they respond without uploading an image or completing the writing exercise, playfully roast them with funny jokes mixed in Bangla (written in Bengali script or phonetic English letters) to make them feel playfully bad and push them to write it down, but keep the lesson moving forward.
 
     MODE-SPECIFIC RULES:
     A) If Mode is 'placementTest': 
-       - Have an energetic conversation to gauge fluency. Output their 'detectedLevel' (number 1 to 20) and 'newPersonalizedPlan[span_3](start_span)'[span_3](end_span).
+       - Have an energetic conversation to gauge fluency. Output 'detectedLevel' and 'newPersonalizedPlan'.
     B) If Mode is 'curriculum':
-       - Use their roadmap to tailor today's lesson. 20% of the time, provide a 1-word search term in 'imageKeyword[span_4](start_span)'[span_4](end_span).
+       - Use their roadmap to tailor today's lesson. 20% of the time, provide a 1-word search term in 'imageKeyword'.
     C) If Mode is 'typing':
-       - Give them sentences to practice typing accuracy[span_5](start_span)[span_5](end_span).
+       - Give them sentences to practice typing accuracy.
     D) If Mode is 'extraHelp':
-       - Act exclusively as a homework helper and open-ended Q&A tutor. Do not push a curriculum[span_6](start_span)[span_6](end_span).`;
+       - Act exclusively as a homework helper and open-ended Q&A tutor.`;
 
     const turnParts: any[] = [];
 
@@ -70,14 +71,15 @@ export async function POST(req: Request) {
     }
 
     const finalContents: any[] = [];
-    if (Array.isArray(chatHistory)) {
-      for (const msg of chatHistory) {
-        if (msg?.content) {
-           finalContents.push({
-             role: msg.role === 'user' ? 'user' : 'model',
-             parts: [{ text: msg.content }]
-           });
-        }
+    
+    // TOKEN SAVER: Only process the last 6 messages instead of the entire chat history
+    const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
+    for (const msg of recentHistory) {
+      if (msg?.content) {
+         finalContents.push({
+           role: msg.role === 'user' ? 'user' : 'model',
+           parts: [{ text: msg.content }]
+         });
       }
     }
 
@@ -87,42 +89,29 @@ export async function POST(req: Request) {
        finalContents.push({ role: 'user', parts: [{ text: "Hello" }] });
     }
 
-    let response: any = null;
-    let lastError = null;
-
-    for (const key of apiKeys) {
-      const ai = new GoogleGenAI({ apiKey: key });
-      for (const modelName of targetModels) {
-        try {
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: finalContents,
-            config: {
-              systemInstruction: systemPrompt,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "OBJECT",
-                properties: {
-                  feedback: { type: "STRING" },
-                  imageKeyword: { type: "STRING" },
-                  progressBump: { type: "NUMBER" },
-                  detectedLevel: { type: "NUMBER" },
-                  newPersonalizedPlan: { type: "STRING" }
-                },
-                required: ["feedback", "imageKeyword", "progressBump"]
-              }
-            },
-          });
-          if (response?.text) break;
-        } catch (err) { 
-          lastError = err; 
+    const ai = new GoogleGenAI({ apiKey: activeApiKey });
+    const response = await ai.models.generateContent({
+      model: targetModel,
+      contents: finalContents,
+      config: {
+        systemInstruction: systemPrompt,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            feedback: { type: "STRING" },
+            imageKeyword: { type: "STRING" },
+            progressBump: { type: "NUMBER" },
+            detectedLevel: { type: "NUMBER" },
+            newPersonalizedPlan: { type: "STRING" }
+          },
+          required: ["feedback", "imageKeyword", "progressBump"]
         }
-      }
-      if (response?.text) break;
-    }
+      },
+    });
 
     if (!response || !response.text) {
-      throw lastError || new Error("All API Keys and AI models failed.");
+      throw new Error("The AI model failed to return a valid text response.");
     }
 
     let rawText = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
