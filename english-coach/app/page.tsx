@@ -9,7 +9,7 @@ interface Message {
 }
 
 export default function InteractiveCoachPage() {
-  const [activeTab, setActiveTab] = useState<'curriculum' | 'extraHelp' | 'placementTest' | 'typing'>('placementTest');
+  const [activeTab, setActiveTab] = useState<'curriculum' | 'extraHelp' | 'placementTest' | 'typing'>('curriculum');
   const [sessionActive, setSessionActive] = useState<boolean>(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState<string>('');
@@ -41,6 +41,7 @@ export default function InteractiveCoachPage() {
       setPlacementCompleted(true);
       setActiveTab('curriculum');
     } else {
+      setPlacementCompleted(false);
       setActiveTab('placementTest');
     }
   }, []);
@@ -258,23 +259,25 @@ export default function InteractiveCoachPage() {
         <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
           <div className="flex items-center space-x-3">
             <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
-            <h1 className="text-lg font-bold">ENGLISH COACH - MR. HANDSOME</h1>
+            <h1 className="text-lg font-bold">ENGLISH COACH</h1>
+            
+            {/* Placement Button positioned where - MR. HANDSOME used to be */}
+            <button
+              onClick={() => {
+                setActiveTab('placementTest');
+                setSessionActive(false);
+              }}
+              className="px-3 py-1 bg-indigo-950 hover:bg-indigo-900 text-xs text-indigo-300 border border-indigo-700/60 rounded-lg transition font-medium"
+            >
+              {placementCompleted ? '🎯 Retake Placement' : '🎯 Take Placement Test'}
+            </button>
+
             <span className="text-xs px-2.5 py-1 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 font-medium">
               Wk {currentWeek}, Day {currentDay}
             </span>
           </div>
+
           <div className="flex items-center space-x-3">
-            {placementCompleted && (
-              <button
-                onClick={() => {
-                  setActiveTab('placementTest');
-                  setSessionActive(false);
-                }}
-                className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-xs text-yellow-400 border border-yellow-600/50 rounded-lg transition font-medium"
-              >
-                Retake Placement
-              </button>
-            )}
             <select
               value={selectedVoice}
               onChange={(e) => setSelectedVoice(e.target.value)}
@@ -288,12 +291,8 @@ export default function InteractiveCoachPage() {
           </div>
         </div>
         
+        {/* Navigation Tabs (Placement Tab removed from list as requested) */}
         <div className="flex space-x-6 border-b border-gray-700 overflow-x-auto whitespace-nowrap">
-          {!placementCompleted && (
-            <button onClick={() => { setActiveTab('placementTest'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'placementTest' ? 'border-b-2 border-yellow-500 text-yellow-400' : 'text-gray-400'}`}>
-              🎯 Placement Test
-            </button>
-          )}
           <button onClick={() => { setActiveTab('curriculum'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'curriculum' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-gray-400'}`}>
             📖 Daily Lesson
           </button>
