@@ -22,6 +22,28 @@ export default function InteractiveCoachPage() {
   const [progressPct, setProgressPct] = useState<number>(10);
   const [personalizedPlan, setPersonalizedPlan] = useState<string | null>(null); 
   const [mode, setMode] = useState<string>('curriculum');
+    // 1. Load saved data when the app opens
+  useEffect(() => {
+    const savedLevel = localStorage.getItem('coachLevel');
+    const savedWeek = localStorage.getItem('coachWeek');
+    const savedDay = localStorage.getItem('coachDay');
+    const savedPlan = localStorage.getItem('coachPlan');
+
+    if (savedLevel) setCurrentLevel(savedLevel);
+    if (savedWeek) setCurrentWeek(Number(savedWeek));
+    if (savedDay) setCurrentDay(Number(savedDay));
+    if (savedPlan) setPersonalizedPlan(savedPlan);
+  }, []);
+
+  // 2. Save data to memory whenever it changes
+  useEffect(() => {
+    localStorage.setItem('coachLevel', currentLevel);
+    localStorage.setItem('coachWeek', currentWeek.toString());
+    localStorage.setItem('coachDay', currentDay.toString());
+    if (personalizedPlan) {
+      localStorage.setItem('coachPlan', personalizedPlan);
+    }
+  }, [currentLevel, currentWeek, currentDay, personalizedPlan]);
   
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>('');
