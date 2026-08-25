@@ -12,25 +12,16 @@ export async function POST(req: Request) {
       process.env.GEMINI_API_KEY_3
     ].filter(Boolean) as string[];
     
-    if (apiKeys.length === 0) {
-      throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
-    }
-
-    // Using stable, universally available production models
-    let targetModels = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+    // Updated to currently supported production models
+    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
     ${personalizedPlan ? `STUDENT'S CUSTOM ROADMAP: ${personalizedPlan}` : "No custom roadmap yet."}
     
-    CORE RULES:
-    1. CORRECTION & FRUSTRATION LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. If they fail 5 times, abort gracefully and pivot to an easier prompt.
-    2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, enforce American accent rules (flap T, schwa sounds, linking consonants).
-    3. HANDWRITING & SYLLABUS: Grade handwriting 1-100 and update 'newPersonalizedPlan' to target weaknesses in future lessons.
-
     MODE-SPECIFIC RULES:
     A) If Mode is 'placementTest': 
-       - Have an energetic conversation to gauge fluency. Output their 'detectedLevel' (number 1 to 20) and 'newPersonalizedPlan'.
+       - Have an energetic conversation to gauge fluency. Output their 'detectedLevel' (number 1 to 5) and 'newPersonalizedPlan'.
     B) If Mode is 'curriculum':
        - Use their roadmap to tailor today's lesson. 20% of the time, provide a 1-word search term in 'imageKeyword'.
     C) If Mode is 'typing':
@@ -51,19 +42,11 @@ export async function POST(req: Request) {
       const match = image.match(/^data:(image\/.*?);base64,(.*)$/);
       if (match) {
          turnParts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-         turnParts.push({ text: "Grade this handwriting, score it 1-100, correct syntax, and update the plan." });
+         turnParts.push({ text: "Grade this handwriting and update the plan." });
       }
     }
 
     if (text) turnParts.push({ text: `User text: ${text}` });
-
-    if (audio && mode !== 'typing') {
-      const match = audio.match(/^data:(audio\/.*?);base64,(.*)$/);
-      if (match) {
-         turnParts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-         turnParts.push({ text: "User sent audio. Analyze grammar, pronunciation, and accent." });
-      }
-    }
 
     const finalContents: any[] = [];
     if (Array.isArray(chatHistory)) {
@@ -84,7 +67,7 @@ export async function POST(req: Request) {
     }
 
     let response: any = null;
-    let lastError: any = null;
+    let lastError = null;
 
     for (const key of apiKeys) {
       const ai = new GoogleGenAI({ apiKey: key });
@@ -110,7 +93,7 @@ export async function POST(req: Request) {
             },
           });
           if (response?.text) break;
-        } catch (err: any) { 
+        } catch (err) { 
           lastError = err; 
         }
       }
@@ -132,10 +115,9 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("CRITICAL BACKEND ERROR:", error);
-    // This will print the precise underlying error message from Google or Vercel onto your screen
     return NextResponse.json({ 
       success: true,
-      feedback: `[API ERROR]: ${error?.message || JSON.stringify(error)}`,
+      feedback: `[SYSTEM ERROR]: ${error.message || "Unknown error occurred"}.`,
       progressBump: 0 
     });
   }
