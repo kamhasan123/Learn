@@ -12,8 +12,12 @@ export async function POST(req: Request) {
       process.env.GEMINI_API_KEY_3
     ].filter(Boolean) as string[];
     
-    // Using the stable flash models that worked previously
-    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
+    if (apiKeys.length === 0) {
+      throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
+    }
+
+    // Using stable, universally available production models
+    let targetModels = ['gemini-1.5-flash', 'gemini-1.5-pro'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
@@ -80,7 +84,7 @@ export async function POST(req: Request) {
     }
 
     let response: any = null;
-    let lastError = null;
+    let lastError: any = null;
 
     for (const key of apiKeys) {
       const ai = new GoogleGenAI({ apiKey: key });
@@ -106,7 +110,7 @@ export async function POST(req: Request) {
             },
           });
           if (response?.text) break;
-        } catch (err) { 
+        } catch (err: any) { 
           lastError = err; 
         }
       }
@@ -128,9 +132,10 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("CRITICAL BACKEND ERROR:", error);
+    // This will print the precise underlying error message from Google or Vercel onto your screen
     return NextResponse.json({ 
       success: true,
-      feedback: `[SYSTEM ERROR]: ${error.message || "Unknown error occurred"}.`,
+      feedback: `[API ERROR]: ${error?.message || JSON.stringify(error)}`,
       progressBump: 0 
     });
   }
