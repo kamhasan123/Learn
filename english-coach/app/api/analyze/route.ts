@@ -12,20 +12,17 @@ export async function POST(req: Request) {
       process.env.GEMINI_API_KEY_3
     ].filter(Boolean) as string[];
     
-    // Dynamic AI Power Allocation: Heavy tasks (Images, Placement) route to Pro model first; light tasks route to Flash models.
-    const isHeavyTask = Boolean(image) || mode === 'placementTest';
-    let targetModels = isHeavyTask 
-      ? ['gemini-1.5-pro', 'gemini-3.7-flash', 'gemini-3.6-flash'] 
-      : ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-1.5-pro'];
+    // Using the stable flash models that worked previously
+    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
     ${personalizedPlan ? `STUDENT'S CUSTOM ROADMAP: ${personalizedPlan}` : "No custom roadmap yet."}
     
-    CORE PEDAGOGICAL RULES FROM SYSTEM ARCHITECTURE:
-    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question.
-    2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, shift grading criteria away from basic vocabulary to heavily enforce American accent rules (flap T, schwa sounds, and linking consonants).
-    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, grade strictly (1-100), correct syntax, and update 'newPersonalizedPlan' to target these exact weaknesses in tomorrow's lesson.
+    CORE RULES:
+    1. CORRECTION & FRUSTRATION LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. If they fail 5 times, abort gracefully and pivot to an easier prompt.
+    2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, enforce American accent rules (flap T, schwa sounds, linking consonants).
+    3. HANDWRITING & SYLLABUS: Grade handwriting 1-100 and update 'newPersonalizedPlan' to target weaknesses in future lessons.
 
     MODE-SPECIFIC RULES:
     A) If Mode is 'placementTest': 
