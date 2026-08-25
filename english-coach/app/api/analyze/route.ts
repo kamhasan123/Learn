@@ -136,12 +136,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true, ...resultData });
 
-  } catch (error: any) {
+  }   } catch (error: any) {
     console.error("CRITICAL BACKEND ERROR:", error);
     return NextResponse.json({ 
       success: true, 
-      feedback: `Let's keep going! What would you like to say next?`, 
+      feedback: `[SYSTEM ERROR]: ${error.message || "Unknown error occurred"}. Please check your API keys and Vercel logs.`, 
       progressBump: 0 
     });
+  }
+
   }
 }
