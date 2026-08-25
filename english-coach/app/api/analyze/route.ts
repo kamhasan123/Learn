@@ -12,7 +12,8 @@ export async function POST(req: Request) {
       process.env.GEMINI_API_KEY_3
     ].filter(Boolean) as string[];
     
-    let targetModels = ['gemini-2.5-flash', 'gemini-3.5-flash'];
+    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
+    
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
@@ -130,11 +131,11 @@ export async function POST(req: Request) {
     let rawText = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
     const resultData = JSON.parse(rawText);
 
-    if (resultData.imageKeyword && resultData.imageKeyword.length > 2) {
+        if (resultData.imageKeyword && resultData.imageKeyword.length > 2) {
       resultData.webImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(resultData.imageKeyword)}?width=800&height=600&nologo=true`;
     }
 
-        return NextResponse.json({ success: true, ...resultData });
+    return NextResponse.json({ success: true, ...resultData });
 
   } catch (error: any) {
     console.error("CRITICAL BACKEND ERROR:", error);
@@ -145,4 +146,3 @@ export async function POST(req: Request) {
     });
   }
 }
-
