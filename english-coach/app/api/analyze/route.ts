@@ -134,16 +134,15 @@ export async function POST(req: Request) {
       resultData.webImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(resultData.imageKeyword)}?width=800&height=600&nologo=true`;
     }
 
-    return NextResponse.json({ success: true, ...resultData });
+        return NextResponse.json({ success: true, ...resultData });
 
-  }   } catch (error: any) {
+  } catch (error: any) {
     console.error("CRITICAL BACKEND ERROR:", error);
     return NextResponse.json({ 
-      success: true, 
-      feedback: `[SYSTEM ERROR]: ${error.message || "Unknown error occurred"}. Please check your API keys and Vercel logs.`, 
+      success: true,
+      feedback: `[SYSTEM ERROR]: ${error.message || "Unknown error occurred"}. Please check your API keys and Vercel logs.`,
       progressBump: 0 
     });
   }
-
-  }
 }
+
