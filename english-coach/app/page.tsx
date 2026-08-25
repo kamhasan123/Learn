@@ -22,17 +22,27 @@ export default function InteractiveCoachPage() {
   const [progressPct, setProgressPct] = useState<number>(10);
   const [personalizedPlan, setPersonalizedPlan] = useState<string | null>(null); 
   const [mode, setMode] = useState<string>('curriculum');
-    // 1. Load saved data when the app opens
+  const [placementCompleted, setPlacementCompleted] = useState<boolean>(false);
+
+  // 1. Load saved data when the app opens
   useEffect(() => {
     const savedLevel = localStorage.getItem('coachLevel');
     const savedWeek = localStorage.getItem('coachWeek');
     const savedDay = localStorage.getItem('coachDay');
     const savedPlan = localStorage.getItem('coachPlan');
+    const savedPlacementDone = localStorage.getItem('coachPlacementDone');
 
     if (savedLevel) setCurrentLevel(savedLevel);
     if (savedWeek) setCurrentWeek(Number(savedWeek));
     if (savedDay) setCurrentDay(Number(savedDay));
     if (savedPlan) setPersonalizedPlan(savedPlan);
+    
+    if (savedPlacementDone === 'true') {
+      setPlacementCompleted(true);
+      setActiveTab('curriculum');
+    } else {
+      setActiveTab('placementTest');
+    }
   }, []);
 
   // 2. Save data to memory whenever it changes
@@ -43,7 +53,8 @@ export default function InteractiveCoachPage() {
     if (personalizedPlan) {
       localStorage.setItem('coachPlan', personalizedPlan);
     }
-  }, [currentLevel, currentWeek, currentDay, personalizedPlan]);
+    localStorage.setItem('coachPlacementDone', placementCompleted.toString());
+  }, [currentLevel, currentWeek, currentDay, personalizedPlan, placementCompleted]);
   
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>('');
@@ -175,7 +186,9 @@ export default function InteractiveCoachPage() {
         if (data.progressBump) setProgressPct(prev => Math.min(prev + data.progressBump, 100));
         
         if (data.detectedLevel) {
-          setCurrentLevel(data.detectedLevel);
+          setCurrentLevel(`Level ${data.detectedLevel}`);
+          setPlacementCompleted(true);
+          localStorage.setItem('coachPlacementDone', 'true');
           if (activeTab === 'placementTest') setActiveTab('curriculum'); 
         }
         
@@ -245,9 +258,23 @@ export default function InteractiveCoachPage() {
         <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
           <div className="flex items-center space-x-3">
             <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
-            <h1 className="text-lg font-bold">ENGLISH COACH</h1>
+            <h1 className="text-lg font-bold">ENGLISH COACH - MR. HANDSOME</h1>
+            <span className="text-xs px-2.5 py-1 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 font-medium">
+              Wk {currentWeek}, Day {currentDay}
+            </span>
           </div>
           <div className="flex items-center space-x-3">
+            {placementCompleted && (
+              <button
+                onClick={() => {
+                  setActiveTab('placementTest');
+                  setSessionActive(false);
+                }}
+                className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-xs text-yellow-400 border border-yellow-600/50 rounded-lg transition font-medium"
+              >
+                Retake Placement
+              </button>
+            )}
             <select
               value={selectedVoice}
               onChange={(e) => setSelectedVoice(e.target.value)}
@@ -262,9 +289,11 @@ export default function InteractiveCoachPage() {
         </div>
         
         <div className="flex space-x-6 border-b border-gray-700 overflow-x-auto whitespace-nowrap">
-          <button onClick={() => { setActiveTab('placementTest'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'placementTest' ? 'border-b-2 border-yellow-500 text-yellow-400' : 'text-gray-400'}`}>
-            🎯 Placement Test
-          </button>
+          {!placementCompleted && (
+            <button onClick={() => { setActiveTab('placementTest'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'placementTest' ? 'border-b-2 border-yellow-500 text-yellow-400' : 'text-gray-400'}`}>
+              🎯 Placement Test
+            </button>
+          )}
           <button onClick={() => { setActiveTab('curriculum'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'curriculum' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-gray-400'}`}>
             📖 Daily Lesson
           </button>
