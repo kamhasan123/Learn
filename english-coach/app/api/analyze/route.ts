@@ -6,18 +6,18 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { text, audio, image, currentLevel, currentWeek, currentDay, mode, personalizedPlan, isInitialGreeting, chatHistory } = body;
 
-    const activeApiKey = [
+    const apiKeys = [
       process.env.GEMINI_API_KEY, 
       process.env.GEMINI_API_KEY_2, 
       process.env.GEMINI_API_KEY_3
-    ].find(Boolean);
-
-    if (!activeApiKey) {
-      throw new Error("No valid API keys found in Vercel Environment Variables.");
+    ].filter(Boolean) as string[];
+    
+    if (apiKeys.length === 0) {
+      throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
-    // STRICTLY forced to the fastest, lowest-cost flash model
-    const targetModel = 'gemini-1.5-flash';
+    // STRICTLY forced to the 3.x flash models that work for your keys
+    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
@@ -89,29 +89,42 @@ export async function POST(req: Request) {
        finalContents.push({ role: 'user', parts: [{ text: "Hello" }] });
     }
 
-    const ai = new GoogleGenAI({ apiKey: activeApiKey });
-    const response = await ai.models.generateContent({
-      model: targetModel,
-      contents: finalContents,
-      config: {
-        systemInstruction: systemPrompt,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            feedback: { type: "STRING" },
-            imageKeyword: { type: "STRING" },
-            progressBump: { type: "NUMBER" },
-            detectedLevel: { type: "NUMBER" },
-            newPersonalizedPlan: { type: "STRING" }
-          },
-          required: ["feedback", "imageKeyword", "progressBump"]
+    let response: any = null;
+    let lastError: any = null;
+
+    for (const key of apiKeys) {
+      const ai = new GoogleGenAI({ apiKey: key });
+      for (const modelName of targetModels) {
+        try {
+          response = await ai.models.generateContent({
+            model: modelName,
+            contents: finalContents,
+            config: {
+              systemInstruction: systemPrompt,
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  feedback: { type: "STRING" },
+                  imageKeyword: { type: "STRING" },
+                  progressBump: { type: "NUMBER" },
+                  detectedLevel: { type: "NUMBER" },
+                  newPersonalizedPlan: { type: "STRING" }
+                },
+                required: ["feedback", "imageKeyword", "progressBump"]
+              }
+            },
+          });
+          if (response?.text) break;
+        } catch (err: any) { 
+          lastError = err; 
         }
-      },
-    });
+      }
+      if (response?.text) break;
+    }
 
     if (!response || !response.text) {
-      throw new Error("The AI model failed to return a valid text response.");
+      throw lastError || new Error("All API Keys and AI models failed.");
     }
 
     let rawText = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
