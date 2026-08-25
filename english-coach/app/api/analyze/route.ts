@@ -23,25 +23,30 @@ export async function POST(req: Request) {
     ${personalizedPlan ? `STUDENT'S CUSTOM ROADMAP: ${personalizedPlan}` : "No custom roadmap yet."}
     
     CORE PEDAGOGICAL RULES FROM SYSTEM ARCHITECTURE:
-    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question.
-    2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, shift grading criteria away from basic vocabulary to heavily enforce American accent rules (flap T, schwa sounds, and linking consonants).
-    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, grade strictly (1-100), correct syntax, and update 'newPersonalizedPlan' to target these exact weaknesses in tomorrow's lesson.
+    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question[span_0](start_span)[span_0](end_span).
+    2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, shift grading criteria away from basic vocabulary to heavily enforce American accent rules (flap T, schwa sounds, and linking consonants)[span_1](start_span)[span_1](end_span).
+    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, grade strictly (1-100), correct syntax, and update 'newPersonalizedPlan' to target these exact weaknesses in tomorrow's lesson[span_2](start_span)[span_2](end_span).
+
+    DYNAMIC HOMEWORK & BANGLA ROAST RULE:
+    - During 'curriculum' mode, organically generate a short, custom written homework exercise tailored directly to today's lesson topic.
+    - Ask the user to write their answer down on paper and upload a photo using the camera button (📸).
+    - If they respond without uploading an image or completing the writing exercise, playfully roast them with funny jokes mixed in **Bangla** (written in Bengali script or phonetic English letters, like "Ki re bhai, lekha chara ki cholche?" or teasing them about being lazy) to make them feel playfully bad and push them to write it down, but keep the lesson moving forward.
 
     MODE-SPECIFIC RULES:
     A) If Mode is 'placementTest': 
-       - Have an energetic conversation to gauge fluency. Output their 'detectedLevel' (number 1 to 20) and 'newPersonalizedPlan'.
+       - Have an energetic conversation to gauge fluency. Output their 'detectedLevel' (number 1 to 20) and 'newPersonalizedPlan[span_3](start_span)'[span_3](end_span).
     B) If Mode is 'curriculum':
-       - Use their roadmap to tailor today's lesson. 20% of the time, provide a 1-word search term in 'imageKeyword'.
+       - Use their roadmap to tailor today's lesson. 20% of the time, provide a 1-word search term in 'imageKeyword[span_4](start_span)'[span_4](end_span).
     C) If Mode is 'typing':
-       - Give them sentences to practice typing accuracy.
+       - Give them sentences to practice typing accuracy[span_5](start_span)[span_5](end_span).
     D) If Mode is 'extraHelp':
-       - Act exclusively as a homework helper and open-ended Q&A tutor. Do not push a curriculum.`;
+       - Act exclusively as a homework helper and open-ended Q&A tutor. Do not push a curriculum[span_6](start_span)[span_6](end_span).`;
 
     const turnParts: any[] = [];
 
     if (isInitialGreeting) {
       if (mode === 'placementTest') turnParts.push({ text: "Start placement test with an exciting greeting asking about their background." });
-      else if (mode === 'curriculum') turnParts.push({ text: `Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}.` });
+      else if (mode === 'curriculum') turnParts.push({ text: `Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}. Give them a custom written homework exercise to do on paper.` });
       else if (mode === 'typing') turnParts.push({ text: "Welcome to Typing Practice. Give them a short sentence to type out." });
       else turnParts.push({ text: "I am ready to help with your English questions or homework!" });
     }
