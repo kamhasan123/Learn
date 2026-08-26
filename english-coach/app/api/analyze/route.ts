@@ -134,7 +134,7 @@ export async function POST(req: Request) {
       resultData.webImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(resultData.imageKeyword)}?width=800&height=600&nologo=true`;
     }
 
-    return NextResponse.json({ success: true, ...resultData });
+        return NextResponse.json({ success: true, ...resultData });
 
   } catch (error: any) {
     console.error("CRITICAL BACKEND ERROR:", error);
