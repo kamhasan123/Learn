@@ -16,8 +16,8 @@ export async function POST(req: Request) {
       throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
-    // Updated to valid production model names to prevent 404 routing crashes
-    let targetModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    // Reverted exactly back to your working models to prevent Vertex AI OAuth crashes
+    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       
       const parts: any[] = [];
       
-      // Safely load historical images so the AI doesn't get amnesia
+      // Safely load historical images so the AI maintains context
       if (msg.imageUrl) {
          const match = msg.imageUrl.match(/^data:(image\/.*?);base64,(.*)$/);
          if (match) {
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
       
       parts.push({ text: msg.content });
       
-      // Inject backend logic ONLY into the very last user message to prevent consecutive role crashes
+      // Inject logic ONLY into the very last user message to prevent consecutive role crashes
       if (i === recentHistory.length - 1 && msg.role === 'user') {
          if (isInitialGreeting) {
             if (mode === 'placementTest') parts.push({ text: "Start placement test with an exciting greeting asking about their background." });
@@ -74,6 +74,10 @@ export async function POST(req: Request) {
          }
          
          if (image) {
+             const currentImageMatch = image.match(/^data:(image\/.*?);base64,(.*)$/);
+             if (currentImageMatch) {
+                 parts.push({ inlineData: { mimeType: currentImageMatch[1], data: currentImageMatch[2] } });
+             }
              parts.push({ text: "Grade this handwriting, score it 1-100, correct syntax, and update the plan." });
          }
          
@@ -100,7 +104,8 @@ export async function POST(req: Request) {
     let lastError: any = null;
 
     for (const key of apiKeys) {
-      const ai = new GoogleGenAI({ apiKey: key });
+      // .trim() prevents invisible spaces from triggering auth errors
+      const ai = new GoogleGenAI({ apiKey: key.trim() });
       for (const modelName of targetModels) {
         try {
           response = await ai.models.generateContent({
