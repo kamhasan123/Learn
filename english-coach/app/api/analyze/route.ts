@@ -5,14 +5,16 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { text, audio, image, currentLevel, currentWeek, currentDay, mode, personalizedPlan, isInitialGreeting, chatHistory } = body;
 
+    // Explicitly check and clean keys, filtering out any empty or undefined values
     const apiKeys = [
       process.env.GEMINI_API_KEY, 
       process.env.GEMINI_API_KEY_2, 
       process.env.GEMINI_API_KEY_3
-    ].filter(Boolean) as string[];
+    ].map(k => k?.trim()).filter(Boolean) as string[];
     
-    if (apiKeys.length === 0) {
-      throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
+    // SAFEGUARD: If Vercel isn't passing the keys, throw an unmistakable error right here
+    if (apiKeys.length === 0 || !apiKeys[0]) {
+      throw new Error("FATAL: GEMINI_API_KEY environment variable is missing or empty in Vercel.");
     }
 
     const targetModel = 'gemini-3.6-flash';
@@ -42,7 +44,6 @@ export async function POST(req: Request) {
        - Act exclusively as a homework helper and open-ended Q&A tutor.`;
 
     const contents: any[] = [];
-    // TOKEN SAVER: Strict history slicer keeping only the last 6 messages
     const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
     
     for (let i = 0; i < recentHistory.length; i++) {
@@ -120,11 +121,9 @@ export async function POST(req: Request) {
     let data: any = null;
     let lastError: any = null;
 
-    // TRUE KEY ROTATION LOOP with query parameter authentication
-    for (const rawKey of apiKeys) {
-      const activeApiKey = rawKey.trim();
+    // KEY ROTATION LOOP
+    for (const activeApiKey of apiKeys) {
       try {
-        // Appending the key directly to the URL string avoids header-based OAuth misrouting
         apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${activeApiKey}`, {
           method: 'POST',
           headers: {
@@ -136,10 +135,10 @@ export async function POST(req: Request) {
         data = await apiResponse.json();
 
         if (apiResponse.ok) {
-          break; // Success!
+          break; // Success
         } else {
           lastError = new Error(data.error?.message || `API error status: ${apiResponse.status}`);
-          continue; // Try next key if quota/error hit
+          continue;
         }
       } catch (err: any) {
         lastError = err;
