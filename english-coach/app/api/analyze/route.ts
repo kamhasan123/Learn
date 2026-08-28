@@ -16,8 +16,8 @@ export async function POST(req: Request) {
       throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
-    // STRICTLY forced to the 3.x flash models that work for your keys
-    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
+    // Updated to valid production model names to prevent 404 routing crashes
+    let targetModels = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
@@ -43,49 +43,56 @@ export async function POST(req: Request) {
     D) If Mode is 'extraHelp':
        - Act exclusively as a homework helper and open-ended Q&A tutor.`;
 
-    const turnParts: any[] = [];
-
-    if (isInitialGreeting) {
-      if (mode === 'placementTest') turnParts.push({ text: "Start placement test with an exciting greeting asking about their background." });
-      else if (mode === 'curriculum') turnParts.push({ text: `Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}. Give them a custom written homework exercise to do on paper.` });
-      else if (mode === 'typing') turnParts.push({ text: "Welcome to Typing Practice. Give them a short sentence to type out." });
-      else turnParts.push({ text: "I am ready to help with your English questions or homework!" });
-    }
-
-    if (image) {
-      const match = image.match(/^data:(image\/.*?);base64,(.*)$/);
-      if (match) {
-         turnParts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-         turnParts.push({ text: "Grade this handwriting, score it 1-100, correct syntax, and update the plan." });
-      }
-    }
-
-    if (text) turnParts.push({ text: `User text: ${text}` });
-
-    if (audio && mode !== 'typing') {
-      const match = audio.match(/^data:(audio\/.*?);base64,(.*)$/);
-      if (match) {
-         turnParts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-         turnParts.push({ text: "User sent audio. Analyze grammar, pronunciation, and accent." });
-      }
-    }
-
     const finalContents: any[] = [];
     
     // TOKEN SAVER: Only process the last 6 messages instead of the entire chat history
     const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
-    for (const msg of recentHistory) {
-      if (msg?.content) {
-         finalContents.push({
-           role: msg.role === 'user' ? 'user' : 'model',
-           parts: [{ text: msg.content }]
-         });
+    
+    for (let i = 0; i < recentHistory.length; i++) {
+      const msg = recentHistory[i];
+      if (!msg?.content) continue;
+      
+      const parts: any[] = [];
+      
+      // Safely load historical images so the AI doesn't get amnesia
+      if (msg.imageUrl) {
+         const match = msg.imageUrl.match(/^data:(image\/.*?);base64,(.*)$/);
+         if (match) {
+            parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+         }
       }
+      
+      parts.push({ text: msg.content });
+      
+      // Inject backend logic ONLY into the very last user message to prevent consecutive role crashes
+      if (i === recentHistory.length - 1 && msg.role === 'user') {
+         if (isInitialGreeting) {
+            if (mode === 'placementTest') parts.push({ text: "Start placement test with an exciting greeting asking about their background." });
+            else if (mode === 'curriculum') parts.push({ text: `Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}. Give them a custom written homework exercise to do on paper.` });
+            else if (mode === 'typing') parts.push({ text: "Welcome to Typing Practice. Give them a short sentence to type out." });
+            else parts.push({ text: "I am ready to help with your English questions or homework!" });
+         }
+         
+         if (image) {
+             parts.push({ text: "Grade this handwriting, score it 1-100, correct syntax, and update the plan." });
+         }
+         
+         if (audio && mode !== 'typing') {
+            const audioMatch = audio.match(/^data:(audio\/.*?);base64,(.*)$/);
+            if (audioMatch) {
+               parts.push({ inlineData: { mimeType: audioMatch[1], data: audioMatch[2] } });
+               parts.push({ text: "User sent audio. Analyze grammar, pronunciation, and accent." });
+            }
+         }
+      }
+      
+      finalContents.push({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: parts
+      });
     }
 
-    if (turnParts.length > 0) {
-       finalContents.push({ role: 'user', parts: turnParts });
-    } else if (finalContents.length === 0) {
+    if (finalContents.length === 0) {
        finalContents.push({ role: 'user', parts: [{ text: "Hello" }] });
     }
 
