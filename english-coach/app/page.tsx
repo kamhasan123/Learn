@@ -24,6 +24,11 @@ export default function InteractiveCoachPage() {
   const [mode, setMode] = useState<string>('curriculum');
   const [placementCompleted, setPlacementCompleted] = useState<boolean>(false);
 
+  // Session Time Tracker States (30 mins to 1 hour target: 45 minutes default target)
+  const [sessionSecondsElapsed, setSessionSecondsElapsed] = useState<number>(0);
+  const [targetSessionDuration, setTargetSessionDuration] = useState<number>(45 * 60); // 45 minutes in seconds
+  const [isSessionTimeUp, setIsSessionTimeUp] = useState<boolean>(false);
+
   // 1. Load saved data when the app opens
   useEffect(() => {
     const savedLevel = localStorage.getItem('coachLevel');
@@ -56,6 +61,34 @@ export default function InteractiveCoachPage() {
     }
     localStorage.setItem('coachPlacementDone', placementCompleted.toString());
   }, [currentLevel, currentWeek, currentDay, personalizedPlan, placementCompleted]);
+
+  // ⏱️ Session Timer Effect (30 mins to 1 hour tracking)
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (sessionActive) {
+      timer = setInterval(() => {
+        setSessionSecondsElapsed(prev => {
+          const nextVal = prev + 1;
+          if (nextVal >= targetSessionDuration && !isSessionTimeUp) {
+            setIsSessionTimeUp(true);
+          }
+          return nextVal;
+        });
+      }, 1000);
+    } else {
+      setSessionSecondsElapsed(0);
+      setIsSessionTimeUp(false);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [sessionActive, targetSessionDuration, isSessionTimeUp]);
+
+  const formatTime = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
   
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>('');
@@ -114,6 +147,8 @@ export default function InteractiveCoachPage() {
     setMode(selectedMode);
     setIsLoading(true);
     setMessages([]);
+    setSessionSecondsElapsed(0);
+    setIsSessionTimeUp(false);
 
     try {
       const res = await fetch('/api/analyze', {
@@ -275,6 +310,23 @@ export default function InteractiveCoachPage() {
             <span className="text-xs px-2.5 py-1 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 font-medium">
               Wk {currentWeek}, Day {currentDay}
             </span>
+
+            {/* Session Timer Badge (30m - 1h target tracker) */}
+            {sessionActive && (
+              <div className={`text-xs px-2.5 py-1 border rounded-lg font-mono flex items-center space-x-1 ${isSessionTimeUp ? 'bg-amber-950 border-amber-700 text-amber-300' : 'bg-gray-800 border-gray-700 text-gray-300'}`}>
+                <span>⏱️ {formatTime(sessionSecondsElapsed)}</span>
+                <select
+                  value={targetSessionDuration}
+                  onChange={(e) => setTargetSessionDuration(Number(e.target.value))}
+                  className="bg-transparent text-[10px] text-gray-400 focus:outline-none cursor-pointer ml-1"
+                  title="Target Session Length"
+                >
+                  <option value={30 * 60} className="bg-gray-900">30m</option>
+                  <option value={45 * 60} className="bg-gray-900">45m</option>
+                  <option value={60 * 60} className="bg-gray-900">60m</option>
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-3">
@@ -311,6 +363,12 @@ export default function InteractiveCoachPage() {
         </div>
       )}
 
+      {sessionActive && isSessionTimeUp && (
+        <div className="bg-amber-900/40 border-b border-amber-800 p-2 text-xs text-amber-200 text-center animate-pulse">
+          🎯 <span className="font-bold">Session Target Reached!</span> You have completed your planned 30–60 minute block. Feel free to wrap up or keep practicing!
+        </div>
+      )}
+
       {activeTab === 'curriculum' && personalizedPlan && (
         <div className="bg-indigo-900/40 border-b border-indigo-800 p-3 text-xs text-indigo-200 text-center">
           <span className="font-bold">Your Custom Path:</span> {personalizedPlan}
@@ -322,7 +380,21 @@ export default function InteractiveCoachPage() {
           <div className="flex flex-col items-center justify-center h-full space-y-6 text-center">
             <div className="p-8 bg-[#111827] border border-gray-800 rounded-2xl shadow-xl max-w-md w-full space-y-4">
               <h2 className="text-xl font-bold">Ready to begin your session?</h2>
-              <p className="text-gray-400 text-sm">Your coach is prepared with custom exercises, live audio corrections, and spoken guidance.</p>
+              <p className="text-gray-400 text-sm">Your coach is prepared with custom exercises, live audio corrections, and spoken guidance (recommended session target: 30–60 minutes).</p>
+              
+              <div className="flex items-center justify-center space-x-2 pt-2">
+                <span className="text-xs text-gray-400">Target Duration:</span>
+                <select
+                  value={targetSessionDuration}
+                  onChange={(e) => setTargetSessionDuration(Number(e.target.value))}
+                  className="bg-[#1f2937] border border-gray-700 text-xs text-indigo-300 rounded px-2 py-1 font-medium"
+                >
+                  <option value={30 * 60}>30 Minutes</option>
+                  <option value={45 * 60}>45 Minutes (Recommended)</option>
+                  <option value={60 * 60}>60 Minutes (1 Hour)</option>
+                </select>
+              </div>
+
               <button
                 onClick={() => startSession(activeTab)}
                 className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition shadow-lg shadow-indigo-600/30"
@@ -372,7 +444,7 @@ export default function InteractiveCoachPage() {
               🎙️
             </button>
 
-            <input 
+                <input 
               type="text" 
               value={inputText} 
               onChange={(e) => setInputText(e.target.value)} 
@@ -403,4 +475,3 @@ export default function InteractiveCoachPage() {
       )}
     </div>
   );
-}
