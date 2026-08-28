@@ -24,10 +24,8 @@ export default function InteractiveCoachPage() {
   const [mode, setMode] = useState<string>('curriculum');
   const [placementCompleted, setPlacementCompleted] = useState<boolean>(false);
 
-  // Session Time Tracker States (30 mins to 1 hour target: 45 minutes default target)
+  // Session Timer State (tracks elapsed time during active session)
   const [sessionSecondsElapsed, setSessionSecondsElapsed] = useState<number>(0);
-  const [targetSessionDuration, setTargetSessionDuration] = useState<number>(45 * 60); // 45 minutes in seconds
-  const [isSessionTimeUp, setIsSessionTimeUp] = useState<boolean>(false);
 
   // 1. Load saved data when the app opens
   useEffect(() => {
@@ -62,27 +60,20 @@ export default function InteractiveCoachPage() {
     localStorage.setItem('coachPlacementDone', placementCompleted.toString());
   }, [currentLevel, currentWeek, currentDay, personalizedPlan, placementCompleted]);
 
-  // ⏱️ Session Timer Effect (30 mins to 1 hour tracking)
+  // ⏱️ Session Timer Effect
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     if (sessionActive) {
       timer = setInterval(() => {
-        setSessionSecondsElapsed(prev => {
-          const nextVal = prev + 1;
-          if (nextVal >= targetSessionDuration && !isSessionTimeUp) {
-            setIsSessionTimeUp(true);
-          }
-          return nextVal;
-        });
+        setSessionSecondsElapsed(prev => prev + 1);
       }, 1000);
     } else {
       setSessionSecondsElapsed(0);
-      setIsSessionTimeUp(false);
     }
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [sessionActive, targetSessionDuration, isSessionTimeUp]);
+  }, [sessionActive]);
 
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -148,7 +139,6 @@ export default function InteractiveCoachPage() {
     setIsLoading(true);
     setMessages([]);
     setSessionSecondsElapsed(0);
-    setIsSessionTimeUp(false);
 
     try {
       const res = await fetch('/api/analyze', {
@@ -311,18 +301,8 @@ export default function InteractiveCoachPage() {
             </span>
 
             {sessionActive && (
-              <div className={`text-xs px-2.5 py-1 border rounded-lg font-mono flex items-center space-x-1 ${isSessionTimeUp ? 'bg-amber-950 border-amber-700 text-amber-300' : 'bg-gray-800 border-gray-700 text-gray-300'}`}>
-                <span>⏱️ {formatTime(sessionSecondsElapsed)}</span>
-                <select
-                  value={targetSessionDuration}
-                  onChange={(e) => setTargetSessionDuration(Number(e.target.value))}
-                  className="bg-transparent text-[10px] text-gray-400 focus:outline-none cursor-pointer ml-1"
-                  title="Target Session Length"
-                >
-                  <option value={30 * 60} className="bg-gray-900">30m</option>
-                  <option value={45 * 60} className="bg-gray-900">45m</option>
-                  <option value={60 * 60} className="bg-gray-900">60m</option>
-                </select>
+              <div className="text-xs px-2.5 py-1 border rounded-lg font-mono bg-gray-800 border-gray-700 text-gray-300 flex items-center space-x-1">
+                <span>⏱️ Session Time: {formatTime(sessionSecondsElapsed)}</span>
               </div>
             )}
           </div>
@@ -360,15 +340,15 @@ export default function InteractiveCoachPage() {
         </div>
       )}
 
-      {sessionActive && isSessionTimeUp && (
-        <div className="bg-amber-900/40 border-b border-amber-800 p-2 text-xs text-amber-200 text-center animate-pulse">
-          🎯 <span className="font-bold">Session Target Reached!</span> You have completed your planned 30–60 minute block. Feel free to wrap up or keep practicing!
-        </div>
-      )}
-
       {activeTab === 'curriculum' && personalizedPlan && (
         <div className="bg-indigo-900/40 border-b border-indigo-800 p-3 text-xs text-indigo-200 text-center">
           <span className="font-bold">Your Custom Path:</span> {personalizedPlan}
+        </div>
+      )}
+
+      {activeTab === 'extraHelp' && !sessionActive && (
+        <div className="bg-green-950/40 border-b border-green-800 p-3 text-xs text-green-200 text-center">
+          <span className="font-bold">Extra Help & Q&A Mode:</span> Ask any grammar questions, homework problems, or get open-ended explanations from your coach.
         </div>
       )}
 
@@ -376,27 +356,24 @@ export default function InteractiveCoachPage() {
         {!sessionActive ? (
           <div className="flex flex-col items-center justify-center h-full space-y-6 text-center">
             <div className="p-8 bg-[#111827] border border-gray-800 rounded-2xl shadow-xl max-w-md w-full space-y-4">
-              <h2 className="text-xl font-bold">Ready to begin your session?</h2>
-              <p className="text-gray-400 text-sm">Your coach is prepared with custom exercises, live audio corrections, and spoken guidance (recommended session target: 30–60 minutes).</p>
-              
-              <div className="flex items-center justify-center space-x-2 pt-2">
-                <span className="text-xs text-gray-400">Target Duration:</span>
-                <select
-                  value={targetSessionDuration}
-                  onChange={(e) => setTargetSessionDuration(Number(e.target.value))}
-                  className="bg-[#1f2937] border border-gray-700 text-xs text-indigo-300 rounded px-2 py-1 font-medium"
-                >
-                  <option value={30 * 60}>30 Minutes</option>
-                  <option value={45 * 60}>45 Minutes (Recommended)</option>
-                  <option value={60 * 60}>60 Minutes (1 Hour)</option>
-                </select>
-              </div>
+              <h2 className="text-xl font-bold">
+                {activeTab === 'extraHelp' ? 'Need Extra Help or Homework Support?' : 'Ready to begin your session?'}
+              </h2>
+              <p className="text-gray-400 text-sm">
+                {activeTab === 'extraHelp' 
+                  ? 'Ask questions freely, review complex grammar concepts, or get direct help with your studies. Typical sessions run between 30 to 60 minutes.'
+                  : 'Your coach is prepared with custom exercises, live audio corrections, and spoken guidance.'}
+              </p>
 
               <button
                 onClick={() => startSession(activeTab)}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl transition shadow-lg shadow-indigo-600/30"
+                className={`w-full py-3 font-medium rounded-xl transition shadow-lg text-white ${
+                  activeTab === 'extraHelp' 
+                    ? 'bg-green-600 hover:bg-green-500 shadow-green-600/30' 
+                    : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30'
+                }`}
               >
-                START {activeTab.toUpperCase()}
+                START {activeTab === 'extraHelp' ? 'EXTRA HELP' : activeTab.toUpperCase()}
               </button>
             </div>
           </div>
@@ -440,7 +417,8 @@ export default function InteractiveCoachPage() {
             >
               🎙️
             </button>
-<input 
+
+            <input 
               type="text" 
               value={inputText} 
               onChange={(e) => setInputText(e.target.value)} 
@@ -471,4 +449,4 @@ export default function InteractiveCoachPage() {
       )}
     </div>
   );
-}          
+              }
