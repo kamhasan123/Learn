@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenAI } from '@google/genai';
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +15,8 @@ export async function POST(req: Request) {
       throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
-    let targetModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+    const activeApiKey = apiKeys[0].trim();
+    const targetModel = 'gemini-2.0-flash';
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     CORE PEDAGOGICAL RULES FROM SYSTEM ARCHITECTURE:
     1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, fully explain the specific error first, provide the correction, and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question.
     2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, shift grading criteria away from basic vocabulary to heavily enforce American accent rules.
-    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, always explicitly output the strict 1-100 score in your feedback, detail any spelling/syntax errors, and update 'newPersonalizedPlan'.
+    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, you must carefully read and transcribe what the user wrote, grade it strictly from 1-100, correct any spelling/syntax errors, and update 'newPersonalizedPlan'.
 
     DYNAMIC HOMEWORK & BANGLA ROAST RULE:
     - During 'curriculum' mode, organically generate a short, custom written homework exercise tailored directly to today's lesson topic.
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     D) If Mode is 'extraHelp':
        - Act exclusively as a homework helper and open-ended Q&A tutor.`;
 
-    const finalContents: any[] = [];
+    const contents: any[] = [];
     const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
     
     for (let i = 0; i < recentHistory.length; i++) {
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       if (msg.imageUrl) {
          const match = msg.imageUrl.match(/^data:(image\/.*?);base64,(.*)$/);
          if (match) {
-            parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+            parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
          }
       }
       
@@ -71,80 +71,74 @@ export async function POST(req: Request) {
          if (image) {
              const currentImageMatch = image.match(/^data:(image\/.*?);base64,(.*)$/);
              if (currentImageMatch) {
-                 parts.push({ inlineData: { mimeType: currentImageMatch[1], data: currentImageMatch[2] } });
+                 parts.push({ inline_data: { mime_type: currentImageMatch[1], data: currentImageMatch[2] } });
              }
-             parts.push({ text: "Please read this handwritten image. Grade this handwriting, explicitly state a score from 1-100, correct the syntax, and explain any errors." });
+             // Explicitly forces the model to read, transcribe, and grade the handwriting
+             parts.push({ text: "Carefully read and transcribe every word of the handwriting in this image. Grade the handwriting strictly from 1-100, include your transcription in your feedback, correct any spelling or syntax mistakes, and update the personalized plan." });
          }
          
          if (audio && mode !== 'typing') {
             const audioMatch = audio.match(/^data:(audio\/.*?);base64,(.*)$/);
             if (audioMatch) {
-               parts.push({ inlineData: { mimeType: audioMatch[1], data: audioMatch[2] } });
+               parts.push({ inline_data: { mime_type: audioMatch[1], data: audioMatch[2] } });
                parts.push({ text: "User sent audio. Analyze grammar, pronunciation, and accent." });
             }
          }
       }
       
-      finalContents.push({
+      contents.push({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: parts
       });
     }
 
-    if (finalContents.length === 0) {
-       finalContents.push({ role: 'user', parts: [{ text: "Hello" }] });
+    if (contents.length === 0) {
+       contents.push({ role: 'user', parts: [{ text: "Hello" }] });
     }
 
-    let response: any = null;
-    let lastError: any = null;
-
-    for (const key of apiKeys) {
-      const cleanKey = key.trim();
-      // Explicitly initialize with header/auth options to bypass internal routing bugs
-      const ai = new GoogleGenAI({ 
-        apiKey: cleanKey,
-        httpOptions: {
-          headers: {
-            'x-goog-api-key': cleanKey
-          }
-        }
-      });
-      
-      for (const modelName of targetModels) {
-        try {
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents: finalContents,
-            config: {
-              systemInstruction: systemPrompt,
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: "OBJECT",
-                properties: {
-                  feedback: { type: "STRING" },
-                  imageKeyword: { type: "STRING" },
-                  progressBump: { type: "NUMBER" },
-                  detectedLevel: { type: "NUMBER" },
-                  newPersonalizedPlan: { type: "STRING" }
-                },
-                required: ["feedback", "imageKeyword", "progressBump"]
-              }
-            },
-          });
-          if (response?.text) break;
-        } catch (err: any) { 
-          lastError = err; 
+    const payload = {
+      contents,
+      system_instruction: {
+        parts: [{ text: systemPrompt }]
+      },
+      generationConfig: {
+        response_mime_type: "application/json",
+        response_schema: {
+          type: "OBJECT",
+          properties: {
+            feedback: { type: "STRING" },
+            imageKeyword: { type: "STRING" },
+            progressBump: { type: "NUMBER" },
+            detectedLevel: { type: "NUMBER" },
+            newPersonalizedPlan: { type: "STRING" }
+          },
+          required: ["feedback", "imageKeyword", "progressBump"]
         }
       }
-      if (response?.text) break;
+    };
+
+    const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': activeApiKey
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await apiResponse.json();
+
+    if (!apiResponse.ok) {
+      throw new Error(data.error?.message || `API error status: ${apiResponse.status}`);
     }
 
-    if (!response || !response.text) {
-      throw lastError || new Error("All API Keys and AI models failed.");
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) {
+      throw new Error("No response text returned from Gemini API.");
     }
 
-    let rawText = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const resultData = JSON.parse(rawText);
+    let cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const resultData = JSON.parse(cleanedText);
 
     if (resultData.imageKeyword && resultData.imageKeyword.length > 2) {
       resultData.webImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(resultData.imageKeyword)}?width=800&height=600&nologo=true`;
