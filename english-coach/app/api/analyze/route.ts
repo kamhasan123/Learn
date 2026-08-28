@@ -16,7 +16,8 @@ export async function POST(req: Request) {
     }
 
     const activeApiKey = apiKeys[0].trim();
-    const targetModel = 'gemini-2.0-flash';
+    // Updated to the exact model requested by the API error message
+    const targetModel = 'gemini-3.6-flash';
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
@@ -73,7 +74,6 @@ export async function POST(req: Request) {
              if (currentImageMatch) {
                  parts.push({ inline_data: { mime_type: currentImageMatch[1], data: currentImageMatch[2] } });
              }
-             // Explicitly forces the model to read, transcribe, and grade the handwriting
              parts.push({ text: "Carefully read and transcribe every word of the handwriting in this image. Grade the handwriting strictly from 1-100, include your transcription in your feedback, correct any spelling or syntax mistakes, and update the personalized plan." });
          }
          
