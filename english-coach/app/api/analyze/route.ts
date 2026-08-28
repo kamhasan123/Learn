@@ -5,16 +5,14 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const { text, audio, image, currentLevel, currentWeek, currentDay, mode, personalizedPlan, isInitialGreeting, chatHistory } = body;
 
-    // Explicitly check and clean keys, filtering out any empty or undefined values
     const apiKeys = [
       process.env.GEMINI_API_KEY, 
       process.env.GEMINI_API_KEY_2, 
       process.env.GEMINI_API_KEY_3
     ].map(k => k?.trim()).filter(Boolean) as string[];
     
-    // SAFEGUARD: If Vercel isn't passing the keys, throw an unmistakable error right here
-    if (apiKeys.length === 0 || !apiKeys[0]) {
-      throw new Error("FATAL: GEMINI_API_KEY environment variable is missing or empty in Vercel.");
+    if (apiKeys.length === 0) {
+      throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
     const targetModel = 'gemini-3.6-flash';
@@ -46,6 +44,7 @@ export async function POST(req: Request) {
     const contents: any[] = [];
     const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
     
+    // Safely map history while preserving past images and avoiding role collisions
     for (let i = 0; i < recentHistory.length; i++) {
       const msg = recentHistory[i];
       if (!msg?.content) continue;
@@ -61,6 +60,7 @@ export async function POST(req: Request) {
       
       parts.push({ text: msg.content });
       
+      // Inject current turn data ONLY into the final user message to prevent role crashes
       if (i === recentHistory.length - 1 && msg.role === 'user') {
          if (isInitialGreeting) {
             if (mode === 'placementTest') parts.push({ text: "Start placement test with an exciting greeting asking about their background." });
@@ -121,7 +121,7 @@ export async function POST(req: Request) {
     let data: any = null;
     let lastError: any = null;
 
-    // KEY ROTATION LOOP
+    // TRUE KEY ROTATION LOOP with query parameter authentication (bypasses SDK OAuth bugs)
     for (const activeApiKey of apiKeys) {
       try {
         apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${activeApiKey}`, {
@@ -135,10 +135,10 @@ export async function POST(req: Request) {
         data = await apiResponse.json();
 
         if (apiResponse.ok) {
-          break; // Success
+          break; // Success!
         } else {
           lastError = new Error(data.error?.message || `API error status: ${apiResponse.status}`);
-          continue;
+          continue; // Try next backup key if quota exceeded
         }
       } catch (err: any) {
         lastError = err;
