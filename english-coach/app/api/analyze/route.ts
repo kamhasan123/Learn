@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { GoogleGenAI } from '@google/genai';
 
 export async function POST(req: Request) {
   try {
@@ -15,23 +16,22 @@ export async function POST(req: Request) {
       throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
-    const activeApiKey = apiKeys[0].trim();
-    // Updated to the exact model requested by the API error message
-    const targetModel = 'gemini-3.6-flash';
+    // STRICTLY forced to the 3.x flash models that work for your keys
+    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
     ${personalizedPlan ? `STUDENT'S CUSTOM ROADMAP: ${personalizedPlan}` : "No custom roadmap yet."}
     
     CORE PEDAGOGICAL RULES FROM SYSTEM ARCHITECTURE:
-    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, fully explain the specific error first, provide the correction, and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question.
+    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question.
     2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, shift grading criteria away from basic vocabulary to heavily enforce American accent rules.
-    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, you must carefully read and transcribe what the user wrote, grade it strictly from 1-100, correct any spelling/syntax errors, and update 'newPersonalizedPlan'.
+    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, grade strictly (1-100), correct syntax, and update 'newPersonalizedPlan'.
 
     DYNAMIC HOMEWORK & BANGLA ROAST RULE:
     - During 'curriculum' mode, organically generate a short, custom written homework exercise tailored directly to today's lesson topic.
     - Ask the user to write their answer down on paper and upload a photo using the camera button (📸).
-    - If they respond without uploading an image or completing the writing exercise, playfully roast them with funny jokes mixed in Bangla to make them feel playfully bad and push them to write it down, but keep the lesson moving forward.
+    - If they respond without uploading an image or completing the writing exercise, playfully roast them with funny jokes mixed in Bangla (written in Bengali script or phonetic English letters) to make them feel playfully bad and push them to write it down, but keep the lesson moving forward.
 
     MODE-SPECIFIC RULES:
     A) If Mode is 'placementTest': 
@@ -43,102 +43,92 @@ export async function POST(req: Request) {
     D) If Mode is 'extraHelp':
        - Act exclusively as a homework helper and open-ended Q&A tutor.`;
 
-    const contents: any[] = [];
-    const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
+    const turnParts: any[] = [];
+
+    if (isInitialGreeting) {
+      if (mode === 'placementTest') turnParts.push({ text: "Start placement test with an exciting greeting asking about their background." });
+      else if (mode === 'curriculum') turnParts.push({ text: `Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}. Give them a custom written homework exercise to do on paper.` });
+      else if (mode === 'typing') turnParts.push({ text: "Welcome to Typing Practice. Give them a short sentence to type out." });
+      else turnParts.push({ text: "I am ready to help with your English questions or homework!" });
+    }
+
+    if (image) {
+      const match = image.match(/^data:(image\/.*?);base64,(.*)$/);
+      if (match) {
+         turnParts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+         turnParts.push({ text: "Grade this handwriting, score it 1-100, correct syntax, and update the plan." });
+      }
+    }
+
+    if (text) turnParts.push({ text: `User text: ${text}` });
+
+    if (audio && mode !== 'typing') {
+      const match = audio.match(/^data:(audio\/.*?);base64,(.*)$/);
+      if (match) {
+         turnParts.push({ inlineData: { mimeType: match[1], data: match[2] } });
+         turnParts.push({ text: "User sent audio. Analyze grammar, pronunciation, and accent." });
+      }
+    }
+
+    const finalContents: any[] = [];
     
-    for (let i = 0; i < recentHistory.length; i++) {
-      const msg = recentHistory[i];
-      if (!msg?.content) continue;
-      
-      const parts: any[] = [];
-      
-      if (msg.imageUrl) {
-         const match = msg.imageUrl.match(/^data:(image\/.*?);base64,(.*)$/);
-         if (match) {
-            parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
-         }
+    // TOKEN SAVER: Only process the last 6 messages instead of the entire chat history
+    const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
+    for (const msg of recentHistory) {
+      if (msg?.content) {
+         finalContents.push({
+           role: msg.role === 'user' ? 'user' : 'model',
+           parts: [{ text: msg.content }]
+         });
       }
-      
-      parts.push({ text: msg.content });
-      
-      if (i === recentHistory.length - 1 && msg.role === 'user') {
-         if (isInitialGreeting) {
-            if (mode === 'placementTest') parts.push({ text: "Start placement test with an exciting greeting asking about their background." });
-            else if (mode === 'curriculum') parts.push({ text: `Start Daily Lesson for Week ${currentWeek}, Day ${currentDay}. Give them a custom written homework exercise to do on paper.` });
-            else if (mode === 'typing') parts.push({ text: "Welcome to Typing Practice. Give them a short sentence to type out." });
-            else parts.push({ text: "I am ready to help with your English questions or homework!" });
-         }
-         
-         if (image) {
-             const currentImageMatch = image.match(/^data:(image\/.*?);base64,(.*)$/);
-             if (currentImageMatch) {
-                 parts.push({ inline_data: { mime_type: currentImageMatch[1], data: currentImageMatch[2] } });
-             }
-             parts.push({ text: "Carefully read and transcribe every word of the handwriting in this image. Grade the handwriting strictly from 1-100, include your transcription in your feedback, correct any spelling or syntax mistakes, and update the personalized plan." });
-         }
-         
-         if (audio && mode !== 'typing') {
-            const audioMatch = audio.match(/^data:(audio\/.*?);base64,(.*)$/);
-            if (audioMatch) {
-               parts.push({ inline_data: { mime_type: audioMatch[1], data: audioMatch[2] } });
-               parts.push({ text: "User sent audio. Analyze grammar, pronunciation, and accent." });
-            }
-         }
-      }
-      
-      contents.push({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: parts
-      });
     }
 
-    if (contents.length === 0) {
-       contents.push({ role: 'user', parts: [{ text: "Hello" }] });
+    if (turnParts.length > 0) {
+       finalContents.push({ role: 'user', parts: turnParts });
+    } else if (finalContents.length === 0) {
+       finalContents.push({ role: 'user', parts: [{ text: "Hello" }] });
     }
 
-    const payload = {
-      contents,
-      system_instruction: {
-        parts: [{ text: systemPrompt }]
-      },
-      generationConfig: {
-        response_mime_type: "application/json",
-        response_schema: {
-          type: "OBJECT",
-          properties: {
-            feedback: { type: "STRING" },
-            imageKeyword: { type: "STRING" },
-            progressBump: { type: "NUMBER" },
-            detectedLevel: { type: "NUMBER" },
-            newPersonalizedPlan: { type: "STRING" }
-          },
-          required: ["feedback", "imageKeyword", "progressBump"]
+    let response: any = null;
+    let lastError: any = null;
+
+    for (const key of apiKeys) {
+      const ai = new GoogleGenAI({ apiKey: key });
+      for (const modelName of targetModels) {
+        try {
+          response = await ai.models.generateContent({
+            model: modelName,
+            contents: finalContents,
+            config: {
+              systemInstruction: systemPrompt,
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: "OBJECT",
+                properties: {
+                  feedback: { type: "STRING" },
+                  imageKeyword: { type: "STRING" },
+                  progressBump: { type: "NUMBER" },
+                  detectedLevel: { type: "NUMBER" },
+                  newPersonalizedPlan: { type: "STRING" }
+                },
+                required: ["feedback", "imageKeyword", "progressBump"]
+              }
+            },
+          });
+          if (response?.text) break;
+        } catch (err: any) { 
+          lastError = err; 
         }
       }
-    };
-
-    const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': activeApiKey
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await apiResponse.json();
-
-    if (!apiResponse.ok) {
-      throw new Error(data.error?.message || `API error status: ${apiResponse.status}`);
+      if (response?.text) break;
     }
 
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!rawText) {
-      throw new Error("No response text returned from Gemini API.");
+    if (!response || !response.text) {
+      throw lastError || new Error("All API Keys and AI models failed.");
     }
 
-    let cleanedText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const resultData = JSON.parse(cleanedText);
+    let rawText = response.text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const resultData = JSON.parse(rawText);
 
     if (resultData.imageKeyword && resultData.imageKeyword.length > 2) {
       resultData.webImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(resultData.imageKeyword)}?width=800&height=600&nologo=true`;
