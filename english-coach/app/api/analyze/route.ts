@@ -16,22 +16,22 @@ export async function POST(req: Request) {
       throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
-    // Reverted exactly back to your working models to prevent Vertex AI OAuth crashes
-    let targetModels = ['gemini-3.7-flash', 'gemini-3.6-flash'];
+    // Strictly bypassing 1.5 and using the active 2.0 AI Studio models
+    let targetModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
     CURRENT STATE: Mode: ${mode}, Level: ${currentLevel}, Week: ${currentWeek}, Day: ${currentDay}.
     ${personalizedPlan ? `STUDENT'S CUSTOM ROADMAP: ${personalizedPlan}` : "No custom roadmap yet."}
     
     CORE PEDAGOGICAL RULES FROM SYSTEM ARCHITECTURE:
-    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, explain it and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question.
+    1. THE CORRECTION LOOP & 5-TRY LIMIT: If the user makes an error, fully explain the specific error first, provide the correction, and command them to repeat the corrected phrase. Check chat history: if they have failed to repeat it correctly 5 times, abort the loop gracefully, praise their effort, and pivot to an easier question.
     2. LEVEL 12+ ACCENT MASTERY: If currentLevel is 12 or higher, shift grading criteria away from basic vocabulary to heavily enforce American accent rules.
-    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, grade strictly (1-100), correct syntax, and update 'newPersonalizedPlan'.
+    3. HANDWRITING & SYLLABUS FEEDBACK: When grading handwriting, always explicitly output the strict 1-100 score in your feedback, detail any spelling/syntax errors, and update 'newPersonalizedPlan'.
 
     DYNAMIC HOMEWORK & BANGLA ROAST RULE:
     - During 'curriculum' mode, organically generate a short, custom written homework exercise tailored directly to today's lesson topic.
     - Ask the user to write their answer down on paper and upload a photo using the camera button (📸).
-    - If they respond without uploading an image or completing the writing exercise, playfully roast them with funny jokes mixed in Bangla (written in Bengali script or phonetic English letters) to make them feel playfully bad and push them to write it down, but keep the lesson moving forward.
+    - If they respond without uploading an image or completing the writing exercise, playfully roast them with funny jokes mixed in Bangla to make them feel playfully bad and push them to write it down, but keep the lesson moving forward.
 
     MODE-SPECIFIC RULES:
     A) If Mode is 'placementTest': 
@@ -44,8 +44,6 @@ export async function POST(req: Request) {
        - Act exclusively as a homework helper and open-ended Q&A tutor.`;
 
     const finalContents: any[] = [];
-    
-    // TOKEN SAVER: Only process the last 6 messages instead of the entire chat history
     const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
     
     for (let i = 0; i < recentHistory.length; i++) {
@@ -54,7 +52,6 @@ export async function POST(req: Request) {
       
       const parts: any[] = [];
       
-      // Safely load historical images so the AI maintains context
       if (msg.imageUrl) {
          const match = msg.imageUrl.match(/^data:(image\/.*?);base64,(.*)$/);
          if (match) {
@@ -64,7 +61,6 @@ export async function POST(req: Request) {
       
       parts.push({ text: msg.content });
       
-      // Inject logic ONLY into the very last user message to prevent consecutive role crashes
       if (i === recentHistory.length - 1 && msg.role === 'user') {
          if (isInitialGreeting) {
             if (mode === 'placementTest') parts.push({ text: "Start placement test with an exciting greeting asking about their background." });
@@ -78,7 +74,7 @@ export async function POST(req: Request) {
              if (currentImageMatch) {
                  parts.push({ inlineData: { mimeType: currentImageMatch[1], data: currentImageMatch[2] } });
              }
-             parts.push({ text: "Grade this handwriting, score it 1-100, correct syntax, and update the plan." });
+             parts.push({ text: "Please read this handwritten image. Grade this handwriting, explicitly state a score from 1-100, correct the syntax, and explain any errors." });
          }
          
          if (audio && mode !== 'typing') {
@@ -104,7 +100,6 @@ export async function POST(req: Request) {
     let lastError: any = null;
 
     for (const key of apiKeys) {
-      // .trim() prevents invisible spaces from triggering auth errors
       const ai = new GoogleGenAI({ apiKey: key.trim() });
       for (const modelName of targetModels) {
         try {
