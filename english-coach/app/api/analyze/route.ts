@@ -120,15 +120,15 @@ export async function POST(req: Request) {
     let data: any = null;
     let lastError: any = null;
 
-    // TRUE KEY ROTATION LOOP: Cycles through all available API keys if quota is exceeded
+    // TRUE KEY ROTATION LOOP with query parameter authentication
     for (const rawKey of apiKeys) {
       const activeApiKey = rawKey.trim();
       try {
-        apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`, {
+        // Appending the key directly to the URL string avoids header-based OAuth misrouting
+        apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${activeApiKey}`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': activeApiKey
+            'Content-Type': 'application/json'
           },
           body: JSON.stringify(payload)
         });
@@ -136,12 +136,10 @@ export async function POST(req: Request) {
         data = await apiResponse.json();
 
         if (apiResponse.ok) {
-          // Success! Break out of the key loop
-          break;
+          break; // Success!
         } else {
-          // If quota exceeded or any error, save error and try the next key in array
           lastError = new Error(data.error?.message || `API error status: ${apiResponse.status}`);
-          continue;
+          continue; // Try next key if quota/error hit
         }
       } catch (err: any) {
         lastError = err;
