@@ -15,8 +15,6 @@ export async function POST(req: Request) {
       throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
-    const activeApiKey = apiKeys[0].trim();
-    // Updated to the exact model requested by the API error message
     const targetModel = 'gemini-3.6-flash';
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
@@ -44,6 +42,7 @@ export async function POST(req: Request) {
        - Act exclusively as a homework helper and open-ended Q&A tutor.`;
 
     const contents: any[] = [];
+    // TOKEN SAVER: Strict history slicer keeping only the last 6 messages
     const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
     
     for (let i = 0; i < recentHistory.length; i++) {
@@ -117,19 +116,41 @@ export async function POST(req: Request) {
       }
     };
 
-    const apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': activeApiKey
-      },
-      body: JSON.stringify(payload)
-    });
+    let apiResponse: any = null;
+    let data: any = null;
+    let lastError: any = null;
 
-    const data = await apiResponse.json();
+    // TRUE KEY ROTATION LOOP: Cycles through all available API keys if quota is exceeded
+    for (const rawKey of apiKeys) {
+      const activeApiKey = rawKey.trim();
+      try {
+        apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': activeApiKey
+          },
+          body: JSON.stringify(payload)
+        });
 
-    if (!apiResponse.ok) {
-      throw new Error(data.error?.message || `API error status: ${apiResponse.status}`);
+        data = await apiResponse.json();
+
+        if (apiResponse.ok) {
+          // Success! Break out of the key loop
+          break;
+        } else {
+          // If quota exceeded or any error, save error and try the next key in array
+          lastError = new Error(data.error?.message || `API error status: ${apiResponse.status}`);
+          continue;
+        }
+      } catch (err: any) {
+        lastError = err;
+        continue;
+      }
+    }
+
+    if (!apiResponse || !apiResponse.ok || !data) {
+      throw lastError || new Error("All API keys failed or exceeded quota limits.");
     }
 
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
