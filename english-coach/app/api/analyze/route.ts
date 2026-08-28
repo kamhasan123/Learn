@@ -44,7 +44,6 @@ export async function POST(req: Request) {
     const contents: any[] = [];
     const recentHistory = Array.isArray(chatHistory) ? chatHistory.slice(-6) : [];
     
-    // Safely map history while preserving past images and avoiding role collisions
     for (let i = 0; i < recentHistory.length; i++) {
       const msg = recentHistory[i];
       if (!msg?.content) continue;
@@ -60,7 +59,6 @@ export async function POST(req: Request) {
       
       parts.push({ text: msg.content });
       
-      // Inject current turn data ONLY into the final user message to prevent role crashes
       if (i === recentHistory.length - 1 && msg.role === 'user') {
          if (isInitialGreeting) {
             if (mode === 'placementTest') parts.push({ text: "Start placement test with an exciting greeting asking about their background." });
@@ -121,7 +119,6 @@ export async function POST(req: Request) {
     let data: any = null;
     let lastError: any = null;
 
-    // TRUE KEY ROTATION LOOP with query parameter authentication (bypasses SDK OAuth bugs)
     for (const activeApiKey of apiKeys) {
       try {
         apiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${activeApiKey}`, {
@@ -135,10 +132,10 @@ export async function POST(req: Request) {
         data = await apiResponse.json();
 
         if (apiResponse.ok) {
-          break; // Success!
+          break;
         } else {
           lastError = new Error(data.error?.message || `API error status: ${apiResponse.status}`);
-          continue; // Try next backup key if quota exceeded
+          continue;
         }
       } catch (err: any) {
         lastError = err;
