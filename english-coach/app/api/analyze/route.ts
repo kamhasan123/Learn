@@ -16,7 +16,6 @@ export async function POST(req: Request) {
       throw new Error("Missing GEMINI_API_KEY environment variable in Vercel.");
     }
 
-    // Strictly bypassing 1.5 and using the active 2.0 AI Studio models
     let targetModels = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 
     let systemPrompt = `You are an elite, stateful English coach named Mr. Handsome.
@@ -100,7 +99,17 @@ export async function POST(req: Request) {
     let lastError: any = null;
 
     for (const key of apiKeys) {
-      const ai = new GoogleGenAI({ apiKey: key.trim() });
+      const cleanKey = key.trim();
+      // Explicitly initialize with header/auth options to bypass internal routing bugs
+      const ai = new GoogleGenAI({ 
+        apiKey: cleanKey,
+        httpOptions: {
+          headers: {
+            'x-goog-api-key': cleanKey
+          }
+        }
+      });
+      
       for (const modelName of targetModels) {
         try {
           response = await ai.models.generateContent({
