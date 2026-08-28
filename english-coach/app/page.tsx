@@ -296,7 +296,6 @@ export default function InteractiveCoachPage() {
             <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
             <h1 className="text-lg font-bold">ENGLISH COACH</h1>
             
-            {/* Placement Button positioned where - MR. HANDSOME used to be */}
             <button
               onClick={() => {
                 setActiveTab('placementTest');
@@ -311,7 +310,6 @@ export default function InteractiveCoachPage() {
               Wk {currentWeek}, Day {currentDay}
             </span>
 
-            {/* Session Timer Badge (30m - 1h target tracker) */}
             {sessionActive && (
               <div className={`text-xs px-2.5 py-1 border rounded-lg font-mono flex items-center space-x-1 ${isSessionTimeUp ? 'bg-amber-950 border-amber-700 text-amber-300' : 'bg-gray-800 border-gray-700 text-gray-300'}`}>
                 <span>⏱️ {formatTime(sessionSecondsElapsed)}</span>
@@ -343,7 +341,6 @@ export default function InteractiveCoachPage() {
           </div>
         </div>
         
-        {/* Navigation Tabs (Placement Tab removed from list as requested) */}
         <div className="flex space-x-6 border-b border-gray-700 overflow-x-auto whitespace-nowrap">
           <button onClick={() => { setActiveTab('curriculum'); setSessionActive(false); }} className={`pb-2 text-sm font-medium ${activeTab === 'curriculum' ? 'border-b-2 border-indigo-500 text-indigo-400' : 'text-gray-400'}`}>
             📖 Daily Lesson
@@ -443,8 +440,7 @@ export default function InteractiveCoachPage() {
             >
               🎙️
             </button>
-
-                <input 
+<input 
               type="text" 
               value={inputText} 
               onChange={(e) => setInputText(e.target.value)} 
@@ -476,3 +472,4 @@ export default function InteractiveCoachPage() {
     </div>
   );
 }
+            
